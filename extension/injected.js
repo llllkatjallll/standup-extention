@@ -18,6 +18,8 @@
   let bubbleBodies = new Map(); // Map task.id to Matter.js body
   let isSettled = false;
   let settleTimer = 0;
+  let lastTasksJson = ''; // Track when tasks change
+  let lastFrameTime = 0; // For FPS throttling
 
   // Listen for task updates
   window.addEventListener('message', (event) => {
@@ -116,16 +118,37 @@
       // Initialize Matter.js engine (Matter.js is already loaded by content.js)
       if (!engine && window.Matter) {
         engine = window.Matter.Engine.create({
-          gravity: { x: 0, y: 0 } // No gravity, we'll use custom forces
+          gravity: { x: 0, y: 0.5 }, // Enable gravity for falling blocks
+          enableSleeping: true, // Allow bodies to sleep when idle
+          positionIterations: 6, // Reduce from default 6
+          velocityIterations: 4, // Reduce from default 4
+          constraintIterations: 2 // Reduce from default 2
         });
         world = engine.world;
-        console.log('Standup Overlay: Matter.js engine initialized');
+        world.bounds = { min: { x: -Infinity, y: -Infinity }, max: { x: Infinity, y: Infinity } };
+        console.log('Standup Overlay: Matter.js engine initialized with gravity + performance optimizations');
       }
       
       // Fallback if Matter.js not loaded
       if (!window.Matter) {
         console.error('Standup Overlay: Matter.js not loaded, cannot initialize physics');
         return stream; // Return original stream
+      }
+
+      // Create ground at bottom
+      let ground = null;
+      function createGround(width, height) {
+        if (ground) {
+          window.Matter.World.remove(world, ground);
+        }
+        ground = window.Matter.Bodies.rectangle(
+          width / 2,
+          height - 20,
+          width,
+          40,
+          { isStatic: true }
+        );
+        window.Matter.World.add(world, ground);
       }
 
       // Color palette
@@ -135,58 +158,68 @@
         '#a8edea', '#fed6e3', '#c471f5', '#12c2e9'
       ];
 
-      // Initialize/update bubble bodies
-      function initCirclePositions(width, height) {
+      // Initialize/update block bodies
+      function initBlockBodies(width, height) {
         const colors = [
           '#667eea', '#764ba2', '#f093fb', '#4facfe',
           '#43e97b', '#fa709a', '#fee140', '#30cfd0',
           '#a8edea', '#fed6e3', '#c471f5', '#12c2e9'
         ];
         
-        const centerX = width / 2 + safeZoneOffsetX;
-        const centerY = height / 2 + safeZoneOffsetY;
+        // Create ground if needed
+        if (!ground) {
+          createGround(width, height);
+        }
+        
+        const blockWidth = 250;
+        const minHeight = 50;
+        const maxHeight = 250;
         
         tasks.forEach((task, index) => {
-          const size = minBubbleSize + (task.size / 100) * (maxBubbleSize - minBubbleSize);
-          const targetAngle = (index / tasks.length) * Math.PI * 2;
+          // Height based on percentage
+          const blockHeight = minHeight + (task.size / 100) * (maxHeight - minHeight);
           
           if (!bubbleBodies.has(task.id)) {
-            // Create new body
-            const angle = targetAngle;
-            const radius = safeZoneSize / 2 + size / 2 + 20;
+            // Create new block - spawn from top at CENTER for clean stacking
+            const spawnX = width / 2 + (Math.random() * 60 - 30); // Center with slight random offset ±30px
+            const spawnY = -blockHeight - 50 - (index * 20); // Stagger spawn slightly
             
-            const body = window.Matter.Bodies.circle(
-              centerX + Math.cos(angle) * radius,
-              centerY + Math.sin(angle) * radius,
-              size / 2,
+            const body = window.Matter.Bodies.rectangle(
+              spawnX,
+              spawnY,
+              blockWidth,
+              blockHeight,
               {
-                restitution: 0.3,
-                friction: 0.3,
-                frictionAir: 0.05,
-                density: 0.001
+                restitution: 0.2,
+                friction: 0.9,
+                frictionAir: 0.01,
+                density: 0.001,
+                chamfer: { radius: 15 }, // Rounded corners
+                inertia: Infinity // Prevent rotation for clean stacking
               }
             );
             
             // Store custom properties
             body.taskId = task.id;
-            body.targetAngle = targetAngle;
-            body.displaySize = size;
+            body.displayWidth = blockWidth;
+            body.displayHeight = blockHeight;
             body.color = colors[index % colors.length];
             
             window.Matter.World.add(world, body);
             bubbleBodies.set(task.id, body);
           } else {
-            // Update existing body
+            // Update existing body properties
             const body = bubbleBodies.get(task.id);
-            body.displaySize = size;
-            body.color = colors[index % colors.length];
-            body.targetAngle = targetAngle;
+            const newHeight = minHeight + (task.size / 100) * (maxHeight - minHeight);
             
-            // Update circle radius if size changed significantly
-            const currentRadius = body.circleRadius;
-            const newRadius = size / 2;
-            if (Math.abs(currentRadius - newRadius) > 5) {
-              window.Matter.Body.scale(body, newRadius / currentRadius, newRadius / currentRadius);
+            body.displayHeight = newHeight;
+            body.displayWidth = blockWidth;
+            body.color = colors[index % colors.length];
+            
+            // Scale if height changed significantly
+            if (Math.abs(body.bounds.max.y - body.bounds.min.y - newHeight) > 10) {
+              const scaleY = newHeight / (body.bounds.max.y - body.bounds.min.y);
+              window.Matter.Body.scale(body, 1, scaleY);
             }
           }
         });
@@ -201,122 +234,41 @@
         }
       }
 
-      // Physics update with Matter.js
+      // Physics update with Matter.js (optimized for performance)
       function updatePhysics(width, height) {
         if (isSettled || !engine) return false;
         
-        const centerX = width / 2 + safeZoneOffsetX;
-        const centerY = height / 2 + safeZoneOffsetY;
-        const padding = 50;
-        
         let maxVelocity = 0;
         
-        // Apply custom forces to each body
+        // Track velocity for settle detection
         bubbleBodies.forEach((body) => {
-          const dx = body.position.x - centerX;
-          const dy = body.position.y - centerY;
-          const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-          
-          // 1. Safe zone repulsion
-          const minDistFromCenter = safeZoneSize / 2 + body.circleRadius + 10;
-          if (distFromCenter < minDistFromCenter && distFromCenter > 0) {
-            const overlap = minDistFromCenter - distFromCenter;
-            const forceMag = overlap * 0.002; // Reduced force for Matter.js
-            window.Matter.Body.applyForce(body, body.position, {
-              x: (dx / distFromCenter) * forceMag,
-              y: (dy / distFromCenter) * forceMag
-            });
-          }
-          
-          // 2. Ring constraint - keep on circle
-          const targetRadius = safeZoneSize / 2 + body.circleRadius + 20;
-          const radiusError = distFromCenter - targetRadius;
-          if (Math.abs(radiusError) > 5 && distFromCenter > 0) {
-            const forceMag = radiusError * -0.0005;
-            window.Matter.Body.applyForce(body, body.position, {
-              x: (dx / distFromCenter) * forceMag,
-              y: (dy / distFromCenter) * forceMag
-            });
-          }
-          
-          // 3. Angular positioning - distribute evenly (STRONG force)
-          if (body.targetAngle !== undefined && distFromCenter > 10) {
-            const currentAngle = Math.atan2(dy, dx);
-            let angleDiff = body.targetAngle - currentAngle;
-            
-            // Normalize angle
-            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-            
-            if (Math.abs(angleDiff) > 0.01) {
-              const tangentX = -Math.sin(currentAngle);
-              const tangentY = Math.cos(currentAngle);
-              const forceMag = angleDiff * 0.003; // 10x stronger for even distribution
-              
-              window.Matter.Body.applyForce(body, body.position, {
-                x: tangentX * forceMag,
-                y: tangentY * forceMag
-              });
-            }
-          }
-          
-          // 4. Bubble-to-bubble repulsion to prevent clustering
-          bubbleBodies.forEach((otherBody) => {
-            if (body !== otherBody) {
-              const dx2 = otherBody.position.x - body.position.x;
-              const dy2 = otherBody.position.y - body.position.y;
-              const dist = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-              const minDist = body.circleRadius + otherBody.circleRadius + 15;
-              
-              if (dist < minDist * 1.5 && dist > 0) {
-                // Push bubbles apart along the circle
-                const overlap = minDist * 1.5 - dist;
-                const forceMag = overlap * 0.0002;
-                window.Matter.Body.applyForce(body, body.position, {
-                  x: -(dx2 / dist) * forceMag,
-                  y: -(dy2 / dist) * forceMag
-                });
-              }
-            }
-          });
-          
-          // 5. Boundary constraints
-          const radius = body.circleRadius;
-          if (body.position.x - radius < padding) {
-            window.Matter.Body.setPosition(body, { x: padding + radius, y: body.position.y });
-            window.Matter.Body.setVelocity(body, { x: Math.abs(body.velocity.x) * 0.5, y: body.velocity.y });
-          }
-          if (body.position.x + radius > width - padding) {
-            window.Matter.Body.setPosition(body, { x: width - padding - radius, y: body.position.y });
-            window.Matter.Body.setVelocity(body, { x: -Math.abs(body.velocity.x) * 0.5, y: body.velocity.y });
-          }
-          if (body.position.y - radius < padding) {
-            window.Matter.Body.setPosition(body, { x: body.position.x, y: padding + radius });
-            window.Matter.Body.setVelocity(body, { x: body.velocity.x, y: Math.abs(body.velocity.y) * 0.5 });
-          }
-          if (body.position.y + radius > height - padding) {
-            window.Matter.Body.setPosition(body, { x: body.position.x, y: height - padding - radius });
-            window.Matter.Body.setVelocity(body, { x: body.velocity.x, y: -Math.abs(body.velocity.y) * 0.5 });
-          }
-          
-          // Track velocity
           const velocity = Math.sqrt(body.velocity.x ** 2 + body.velocity.y ** 2);
           maxVelocity = Math.max(maxVelocity, velocity);
+          
+          // Keep blocks within horizontal bounds
+          const halfWidth = body.displayWidth / 2;
+          if (body.position.x - halfWidth < 20) {
+            window.Matter.Body.setPosition(body, { x: 20 + halfWidth, y: body.position.y });
+            window.Matter.Body.setVelocity(body, { x: 0, y: body.velocity.y });
+          }
+          if (body.position.x + halfWidth > width - 20) {
+            window.Matter.Body.setPosition(body, { x: width - 20 - halfWidth, y: body.position.y });
+            window.Matter.Body.setVelocity(body, { x: 0, y: body.velocity.y });
+          }
         });
         
-        // Update Matter.js engine
-        window.Matter.Engine.update(engine, 1000 / 60); // 60 FPS
+        // Update Matter.js engine at reduced rate (30 FPS instead of 60)
+        window.Matter.Engine.update(engine, 33.33); // Match our throttled FPS
         
         // Check if settled
-        if (maxVelocity < 0.1) {
+        if (maxVelocity < 0.15) {
           settleTimer++;
-          if (settleTimer > 60) {
+          if (settleTimer > 45) { // Reduced from 90 (1.5s at 30fps)
             isSettled = true;
-            console.log('Standup Overlay: Physics settled');
-            // Stop all bodies
+            console.log('Standup Overlay: Blocks settled');
+            // Put all bodies to sleep for maximum performance
             bubbleBodies.forEach((body) => {
-              window.Matter.Body.setVelocity(body, { x: 0, y: 0 });
-              window.Matter.Body.setAngularVelocity(body, 0);
+              window.Matter.Sleeping.set(body, true);
             });
           }
         } else {
@@ -326,8 +278,15 @@
         return maxVelocity > 0.001;
       }
 
-      // Function to draw overlay
-      function drawOverlay() {
+      // Function to draw overlay (throttled to 30 FPS)
+      function drawOverlay(timestamp) {
+        // Throttle to 30 FPS (33.33ms per frame) to match capture stream
+        if (timestamp - lastFrameTime < 33) {
+          requestAnimationFrame(drawOverlay);
+          return;
+        }
+        lastFrameTime = timestamp;
+        
         // Draw video frame
         try {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -338,8 +297,12 @@
         }
 
       if (overlayEnabled && tasks.length > 0) {
-        // Initialize positions for new tasks
-        initCirclePositions(canvas.width, canvas.height);
+        // Only initialize blocks when tasks actually change
+        const currentTasksJson = JSON.stringify(tasks.map(t => ({ id: t.id, size: t.size })));
+        if (currentTasksJson !== lastTasksJson) {
+          initBlockBodies(canvas.width, canvas.height);
+          lastTasksJson = currentTasksJson;
+        }
         
         // Run physics simulation only if not settled
         if (!isSettled) {
@@ -351,11 +314,11 @@
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
         
-        // Draw each circle from Matter.js bodies
+        // Draw each block from Matter.js bodies
         tasks.forEach(task => {
           const body = bubbleBodies.get(task.id);
           if (body) {
-            drawCircle(ctx, task, body.position.x, body.position.y, body.displaySize, body.color);
+            drawBlock(ctx, task, body.position.x, body.position.y, body.displayWidth, body.displayHeight, body.angle, body.color);
           }
         });
         
@@ -374,63 +337,52 @@
       requestAnimationFrame(drawOverlay);
     }
 
-    // Helper function to draw a single circle
-    function drawCircle(ctx, task, x, y, size, color) {
+    // Helper function to draw a single block
+    function drawBlock(ctx, task, x, y, width, height, angle, color) {
       ctx.save();
       
-      // Shadow for depth
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-      ctx.shadowBlur = 15;
-      ctx.shadowOffsetX = 3;
+      // Translate and rotate for block
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      
+      // Simplified shadow for better performance
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 3;
       
-      // Completion animation
-      let scale = 1;
-      if (task.completed && task.completedAt) {
-        const elapsed = Date.now() - task.completedAt;
-        if (elapsed < 500) {
-          scale = 1 + Math.sin((elapsed / 500) * Math.PI) * 0.3;
-        }
-      }
-      
-      // Draw circle
+      // Draw rounded rectangle
+      const radius = 25;
       ctx.beginPath();
-      ctx.arc(x, y, (size / 2) * scale, 0, Math.PI * 2);
+      ctx.moveTo(-width / 2 + radius, -height / 2);
+      ctx.lineTo(width / 2 - radius, -height / 2);
+      ctx.quadraticCurveTo(width / 2, -height / 2, width / 2, -height / 2 + radius);
+      ctx.lineTo(width / 2, height / 2 - radius);
+      ctx.quadraticCurveTo(width / 2, height / 2, width / 2 - radius, height / 2);
+      ctx.lineTo(-width / 2 + radius, height / 2);
+      ctx.quadraticCurveTo(-width / 2, height / 2, -width / 2, height / 2 - radius);
+      ctx.lineTo(-width / 2, -height / 2 + radius);
+      ctx.quadraticCurveTo(-width / 2, -height / 2, -width / 2 + radius, -height / 2);
+      ctx.closePath();
       
       // Fill with color or completed color
       if (task.completed) {
         ctx.fillStyle = '#28a745';
       } else {
         // Gradient for depth
-        const gradient = ctx.createRadialGradient(
-          x - size / 6, y - size / 6, size / 10,
-          x, y, size / 2
-        );
-        gradient.addColorStop(0, lightenColor(color, 20));
+        const gradient = ctx.createLinearGradient(0, -height / 2, 0, height / 2);
+        gradient.addColorStop(0, lightenColor(color, 15));
         gradient.addColorStop(1, color);
-        ctx.fillStyle = gradient;
+        ctx.fillStyle = color;
       }
       ctx.fill();
       
       // Border
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.lineWidth = 3;
       ctx.stroke();
       
       ctx.shadowColor = 'transparent'; // Turn off shadow for text
-      
-      // Draw checkmark if completed
-      if (task.completed) {
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = size / 15;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(x - size / 6, y);
-        ctx.lineTo(x - size / 12, y + size / 6);
-        ctx.lineTo(x + size / 4, y - size / 6);
-        ctx.stroke();
-      }
       
       // Draw text
       ctx.fillStyle = 'white';
@@ -438,14 +390,14 @@
       ctx.textBaseline = 'middle';
       
       // Task name
-      const fontSize = Math.max(12, Math.min(18, size / 6));
+      const fontSize = Math.min(20, height / 4);
       ctx.font = `bold ${fontSize}px Arial, sans-serif`;
       
       // Word wrap for longer text
       const words = task.text.split(' ');
-      const maxWidth = size * 0.8;
+      const maxWidth = width * 0.9;
       let lines = [];
-      let currentLine = words[0];
+      let currentLine = words[0] || '';
       
       for (let i = 1; i < words.length; i++) {
         const testLine = currentLine + ' ' + words[i];
@@ -460,16 +412,30 @@
       lines.push(currentLine);
       
       // Draw lines
-      const lineHeight = fontSize * 1.2;
-      const textY = y - ((lines.length - 1) * lineHeight) / 2 - fontSize / 4;
+      const lineHeight = fontSize * 1.3;
+      const totalTextHeight = lines.length * lineHeight;
+      const startY = -totalTextHeight / 2 + lineHeight / 2;
       
       lines.forEach((line, i) => {
-        ctx.fillText(line, x, textY + i * lineHeight);
+        ctx.fillText(line, 0, startY + i * lineHeight);
       });
       
       // Percentage below
-      ctx.font = `bold ${fontSize + 2}px Arial`;
-      ctx.fillText(`${task.size}%`, x, y + size / 2 - fontSize - 5);
+      ctx.font = `bold ${fontSize - 2}px Arial`;
+      ctx.fillText(`${task.size}%`, 0, height / 2 - fontSize);
+      
+      // Draw checkmark if completed
+      if (task.completed) {
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-20, 0);
+        ctx.lineTo(-10, 10);
+        ctx.lineTo(20, -15);
+        ctx.stroke();
+      }
       
       ctx.restore();
     }
