@@ -9,7 +9,107 @@ class TaskManager {
   async init() {
     await this.loadTasks();
     this.setupEventListeners();
+    this.setupTabs();
+    this.setupSettings();
     this.render();
+  }
+
+  setupTabs() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.dataset.tab;
+        
+        // Update active tab button
+        tabBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Update active tab content
+        tabContents.forEach(content => {
+          if (content.id === `${tabName}-tab`) {
+            content.classList.add('active');
+          } else {
+            content.classList.remove('active');
+          }
+        });
+      });
+    });
+  }
+
+  setupSettings() {
+    const safeZoneSlider = document.getElementById('safeZoneSize');
+    const safeZoneValue = document.getElementById('safeZoneSizeValue');
+    const offsetXSlider = document.getElementById('safeZoneOffsetX');
+    const offsetXValue = document.getElementById('safeZoneOffsetXValue');
+    const offsetYSlider = document.getElementById('safeZoneOffsetY');
+    const offsetYValue = document.getElementById('safeZoneOffsetYValue');
+    const previewCircle = document.getElementById('previewCircle');
+
+    // Load saved values
+    chrome.storage.local.get(['safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY'], (data) => {
+      const size = data.safeZoneSize !== undefined ? data.safeZoneSize : 200;
+      const offsetX = data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0;
+      const offsetY = data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0;
+      
+      safeZoneSlider.value = size;
+      safeZoneValue.textContent = `${size}px`;
+      offsetXSlider.value = offsetX;
+      offsetXValue.textContent = `${offsetX}px`;
+      offsetYSlider.value = offsetY;
+      offsetYValue.textContent = `${offsetY}px`;
+      
+      this.updatePreview(size, offsetX, offsetY);
+    });
+
+    safeZoneSlider.addEventListener('input', (e) => {
+      const size = parseInt(e.target.value);
+      safeZoneValue.textContent = `${size}px`;
+      this.updatePreview(size, parseInt(offsetXSlider.value), parseInt(offsetYSlider.value));
+    });
+
+    safeZoneSlider.addEventListener('change', (e) => {
+      const size = parseInt(e.target.value);
+      this.saveSettings({ safeZoneSize: size });
+      this.notifyContentScript();
+    });
+
+    offsetXSlider.addEventListener('input', (e) => {
+      const offsetX = parseInt(e.target.value);
+      offsetXValue.textContent = `${offsetX}px`;
+      this.updatePreview(parseInt(safeZoneSlider.value), offsetX, parseInt(offsetYSlider.value));
+    });
+
+    offsetXSlider.addEventListener('change', (e) => {
+      const offsetX = parseInt(e.target.value);
+      this.saveSettings({ safeZoneOffsetX: offsetX });
+      this.notifyContentScript();
+    });
+
+    offsetYSlider.addEventListener('input', (e) => {
+      const offsetY = parseInt(e.target.value);
+      offsetYValue.textContent = `${offsetY}px`;
+      this.updatePreview(parseInt(safeZoneSlider.value), parseInt(offsetXSlider.value), offsetY);
+    });
+
+    offsetYSlider.addEventListener('change', (e) => {
+      const offsetY = parseInt(e.target.value);
+      this.saveSettings({ safeZoneOffsetY: offsetY });
+      this.notifyContentScript();
+    });
+  }
+
+  updatePreview(size, offsetX, offsetY) {
+    const previewCircle = document.getElementById('previewCircle');
+    // Scale to preview (150px SVG = ~700px video, so radius scaled down)
+    const previewRadius = (size / 700) * 70;
+    const previewOffsetX = (offsetX / 700) * 70;
+    const previewOffsetY = (offsetY / 700) * 70;
+    
+    previewCircle.setAttribute('r', Math.max(5, Math.min(70, previewRadius)));
+    previewCircle.setAttribute('cx', 75 + previewOffsetX);
+    previewCircle.setAttribute('cy', 75 + previewOffsetY);
   }
 
   setupEventListeners() {
@@ -119,7 +219,7 @@ class TaskManager {
   }
 
   async loadTasks() {
-    const data = await chrome.storage.local.get(['tasks', 'nextId', 'overlayEnabled']);
+    const data = await chrome.storage.local.get(['tasks', 'nextId', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY']);
     this.tasks = data.tasks || [];
     this.nextId = data.nextId || 1;
     document.getElementById('overlayEnabled').checked = data.overlayEnabled !== false;
@@ -132,9 +232,14 @@ class TaskManager {
   async notifyContentScript() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab) {
+      const data = await chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY']);
       chrome.tabs.sendMessage(tab.id, { 
         type: 'UPDATE_TASKS', 
-        tasks: this.tasks 
+        tasks: data.tasks || [],
+        overlayEnabled: data.overlayEnabled !== false,
+        safeZoneSize: data.safeZoneSize !== undefined ? data.safeZoneSize : 200,
+        safeZoneOffsetX: data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0,
+        safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0
       }).catch(() => {
         // Tab might not have content script injected
       });

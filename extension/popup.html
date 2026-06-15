@@ -10,37 +10,87 @@
   <div class="container">
     <h1>📋 Standup Tasks</h1>
     
-    <div class="add-task-section">
-      <input type="text" id="taskInput" placeholder="Add a task..." />
-      <input type="number" id="taskSize" placeholder="%" min="1" max="100" value="10" />
-      <button id="addTaskBtn">+</button>
+    <!-- Tab Navigation -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="tasks">Tasks</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
     </div>
 
-    <div class="tasks-list" id="tasksList"></div>
+    <!-- Tasks Tab -->
+    <div class="tab-content active" id="tasks-tab">
+      <div class="add-task-section">
+        <input type="text" id="taskInput" placeholder="Add a task..." />
+        <input type="number" id="taskSize" placeholder="%" min="1" max="100" value="10" />
+        <button id="addTaskBtn">+</button>
+      </div>
 
-    <div class="stats">
-      <div class="stat-item">
-        <span>Total:</span>
-        <strong id="totalProgress">0%</strong>
+      <div class="tasks-list" id="tasksList"></div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <span>Total:</span>
+          <strong id="totalProgress">0%</strong>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label class="toggle">
+          <input type="checkbox" id="overlayEnabled" checked>
+          <span>Show overlay in meetings</span>
+        </label>
+      </div>
+
+      <div class="info">
+        <p><strong>How to use:</strong></p>
+        <ol>
+          <li>Add your standup tasks here</li>
+          <li>Join your meeting (Meet/Zoom/Teams)</li>
+          <li>Turn on your camera</li>
+          <li>Your tasks will appear as bubbles!</li>
+        </ol>
+        <p><small>Mark tasks complete during your standup by clicking them</small></p>
       </div>
     </div>
 
-    <div class="controls">
-      <label class="toggle">
-        <input type="checkbox" id="overlayEnabled" checked>
-        <span>Show overlay in meetings</span>
-      </label>
-    </div>
+    <!-- Settings Tab -->
+    <div class="tab-content" id="settings-tab">
+      <div class="settings-section">
+        <h3>💫 Safe Space</h3>
+        <p class="setting-description">Adjust the area in the center where bubbles won't appear (for your head)</p>
+        
+        <div class="setting-control">
+          <label for="safeZoneSize">Safe zone size:</label>
+          <div class="slider-container">
+            <input type="range" id="safeZoneSize" min="0" max="400" value="200" step="10">
+            <span id="safeZoneSizeValue">200px</span>
+          </div>
+        </div>
 
-    <div class="info">
-      <p><strong>How to use:</strong></p>
-      <ol>
-        <li>Add your standup tasks here</li>
-        <li>Join your meeting (Meet/Zoom/Teams)</li>
-        <li>Turn on your camera</li>
-        <li>Your tasks will appear as an overlay!</li>
-      </ol>
-      <p><small>Mark tasks complete during your standup by clicking them</small></p>
+        <div class="setting-control">
+          <label for="safeZoneOffsetX">Horizontal position:</label>
+          <div class="slider-container">
+            <input type="range" id="safeZoneOffsetX" min="-300" max="300" value="0" step="10">
+            <span id="safeZoneOffsetXValue">0px</span>
+          </div>
+        </div>
+
+        <div class="setting-control">
+          <label for="safeZoneOffsetY">Vertical position:</label>
+          <div class="slider-container">
+            <input type="range" id="safeZoneOffsetY" min="-200" max="200" value="0" step="10">
+            <span id="safeZoneOffsetYValue">0px</span>
+          </div>
+        </div>
+
+        <div class="setting-preview">
+          <svg width="150" height="150" viewBox="0 0 150 150">
+            <circle cx="75" cy="75" r="70" fill="#f0f0f0" stroke="#ddd" stroke-width="2"/>
+            <circle id="previewCircle" cx="75" cy="75" r="35" fill="rgba(102, 126, 234, 0.2)" stroke="#667eea" stroke-width="2" stroke-dasharray="5,5"/>
+            <text x="75" y="75" text-anchor="middle" dominant-baseline="middle" fill="#667eea" font-size="12">Safe Zone</text>
+          </svg>
+          <p class="preview-label">Preview (your video)</p>
+        </div>
+      </div>
     </div>
   </div>
 

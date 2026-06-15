@@ -6,6 +6,9 @@ A Chrome/Edge browser extension that displays your standup tasks as an overlay d
 
 - **Direct webcam injection** - Works in Google Meet, Zoom, Teams, and Webex
 - **Task management** - Add, complete, and delete tasks with percentages
+- **Smart bubble layout** - Colorful circles distributed around a safe zone
+- **Customizable safe space** - Adjustable size and position for your head
+- **Dynamic sizing** - Bigger percentage = bigger bubble
 - **Real-time updates** - Modify tasks during your meeting
 - **Engaging animations** - Completion animations when you check off tasks
 - **Overload detection** - Visual indicator when total exceeds 100%

@@ -20,7 +20,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Forward to injected script via custom event
     window.postMessage({
       type: 'STANDUP_UPDATE_TASKS',
-      tasks: message.tasks
+      tasks: message.tasks,
+      overlayEnabled: message.overlayEnabled,
+      safeZoneSize: message.safeZoneSize,
+      safeZoneOffsetX: message.safeZoneOffsetX,
+      safeZoneOffsetY: message.safeZoneOffsetY
     }, '*');
   }
 });
@@ -28,12 +32,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Load tasks on page load and send to injected script
 // Wait a bit to ensure injected script is ready
 setTimeout(() => {
-  chrome.storage.local.get(['tasks', 'overlayEnabled'], (data) => {
+  chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY'], (data) => {
     console.log('Standup Overlay: Sending initial tasks to page', data.tasks?.length || 0);
     window.postMessage({
       type: 'STANDUP_INIT',
       tasks: data.tasks || [],
-      overlayEnabled: data.overlayEnabled !== false
+      overlayEnabled: data.overlayEnabled !== false,
+      safeZoneSize: data.safeZoneSize !== undefined ? data.safeZoneSize : 200,
+      safeZoneOffsetX: data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0,
+      safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0
     }, '*');
   });
 }, 100);
@@ -41,11 +48,14 @@ setTimeout(() => {
 // Listen for storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local') {
-    chrome.storage.local.get(['tasks', 'overlayEnabled'], (data) => {
+    chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY'], (data) => {
       window.postMessage({
         type: 'STANDUP_UPDATE_TASKS',
         tasks: data.tasks || [],
-        overlayEnabled: data.overlayEnabled !== false
+        overlayEnabled: data.overlayEnabled !== false,
+        safeZoneSize: data.safeZoneSize !== undefined ? data.safeZoneSize : 200,
+        safeZoneOffsetX: data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0,
+        safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0
       }, '*');
     });
   }
