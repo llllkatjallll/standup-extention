@@ -39,7 +39,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       safeZoneOffsetX: message.safeZoneOffsetX,
       safeZoneOffsetY: message.safeZoneOffsetY,
       minBubbleSize: message.minBubbleSize,
-      maxBubbleSize: message.maxBubbleSize
+      maxBubbleSize: message.maxBubbleSize,
+      presentationStep: message.presentationStep
     }, '*');
   }
 });

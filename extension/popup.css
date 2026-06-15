@@ -391,3 +391,147 @@ h1 {
   color: #666;
   margin: 0;
 }
+
+/* Presentation Mode */
+.presentation-mode {
+  background: white;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.presentation-mode h3 {
+  font-size: 16px;
+  color: #667eea;
+  margin-bottom: 10px;
+}
+
+.step-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.step-btn {
+  padding: 10px 15px;
+  border: 2px solid #e0e0e0;
+  background: white;
+  color: #333;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.step-btn:hover:not(.disabled) {
+  border-color: #667eea;
+  background: #f8f9ff;
+}
+
+.step-btn.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.step-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.current-step {
+  font-size: 12px;
+  color: #666;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.current-step strong {
+  color: #667eea;
+}
+
+/* Task completion controls */
+.task-status-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.task-status-control label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+
+.status-select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-select:hover {
+  border-color: #667eea;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Task percent complete control */
+.task-percent-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.task-percent-control label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+
+.percent-input {
+  width: 70px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.percent-input:hover {
+  border-color: #ffa500;
+}
+
+.percent-input:focus {
+  outline: none;
+  border-color: #ffa500;
+  box-shadow: 0 0 0 3px rgba(255, 165, 0, 0.1);
+}
+
+.task-percent-control span {
+  font-size: 12px;
+  color: #666;
+}
