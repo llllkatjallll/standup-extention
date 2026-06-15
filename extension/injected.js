@@ -6,12 +6,12 @@
 
   let tasks = [];
   let overlayEnabled = true;
-  let safeZoneSize = 200; // Default safe zone radius
-  let safeZoneOffsetX = 0;
-  let safeZoneOffsetY = 0;
-  let minBubbleSize = 40;
-  let maxBubbleSize = 200;
-  let presentationStep = 0; // 0=editing, 1=yesterday, 2=progress
+  let leftStackX = 25; // Default left stack position (percentage)
+  let rightStackX = 75; // Default right stack position (percentage)
+  let minBlockHeight = 50;
+  let maxBlockHeight = 250;
+  let mirrorHorizontally = true; // Default to mirrored
+  let presentationStep = 1; // Start at step 1: Yesterday's Tasks
   
   // Matter.js variables (Matter is loaded globally by content.js)
   let engine = null;
@@ -33,11 +33,11 @@
       
       tasks = event.data.tasks || [];
       overlayEnabled = event.data.overlayEnabled !== false;
-      safeZoneSize = event.data.safeZoneSize !== undefined ? event.data.safeZoneSize : 200;
-      safeZoneOffsetX = event.data.safeZoneOffsetX !== undefined ? event.data.safeZoneOffsetX : 0;
-      safeZoneOffsetY = event.data.safeZoneOffsetY !== undefined ? event.data.safeZoneOffsetY : 0;
-      minBubbleSize = event.data.minBubbleSize !== undefined ? event.data.minBubbleSize : 40;
-      maxBubbleSize = event.data.maxBubbleSize !== undefined ? event.data.maxBubbleSize : 200;
+      leftStackX = event.data.leftStackX !== undefined ? event.data.leftStackX : 25;
+      rightStackX = event.data.rightStackX !== undefined ? event.data.rightStackX : 75;
+      minBlockHeight = event.data.minBlockHeight !== undefined ? event.data.minBlockHeight : 50;
+      maxBlockHeight = event.data.maxBlockHeight !== undefined ? event.data.maxBlockHeight : 250;
+      mirrorHorizontally = event.data.mirrorHorizontally !== undefined ? event.data.mirrorHorizontally : true;
       presentationStep = event.data.presentationStep !== undefined ? event.data.presentationStep : 0;
       console.log('Standup Overlay: Tasks updated', tasks.length, 'Step:', presentationStep);
       
@@ -109,6 +109,19 @@
     console.log('Standup Overlay: Adding overlay to video stream');
 
     try {
+      // Load Google Sans font for canvas rendering
+      if (!document.fonts.check('16px "Google Sans"')) {
+        try {
+          const fontUrl = chrome.runtime.getURL('GoogleSans-Medium.ttf');
+          const font = new FontFace('Google Sans', `url(${fontUrl})`);
+          await font.load();
+          document.fonts.add(font);
+          console.log('Standup Overlay: Google Sans font loaded');
+        } catch (fontError) {
+          console.warn('Standup Overlay: Could not load Google Sans font, using fallback', fontError);
+        }
+      }
+      
       // Create video element to read the original stream
       const video = document.createElement('video');
       video.srcObject = stream;
@@ -165,20 +178,58 @@
         return stream; // Return original stream
       }
 
-      // Create ground at bottom
+      // Create ground and walls to contain blocks
       let ground = null;
+      let leftWall = null;
+      let rightWall = null;
+      let topWall = null;
+      
       function createGround(width, height) {
-        if (ground) {
-          window.Matter.World.remove(world, ground);
-        }
+        // Remove old bodies
+        if (ground) window.Matter.World.remove(world, ground);
+        if (leftWall) window.Matter.World.remove(world, leftWall);
+        if (rightWall) window.Matter.World.remove(world, rightWall);
+        if (topWall) window.Matter.World.remove(world, topWall);
+        
+        const wallThickness = 50;
+        
+        // Ground at bottom (raised to make room for labels)
         ground = window.Matter.Bodies.rectangle(
           width / 2,
-          height - 20,
+          height - 80,  // Raised to make room for labels at bottom
           width,
           40,
-          { isStatic: true }
+          { isStatic: true, label: 'ground' }
         );
-        window.Matter.World.add(world, ground);
+        
+        // Left wall
+        leftWall = window.Matter.Bodies.rectangle(
+          -wallThickness / 2,
+          height / 2,
+          wallThickness,
+          height * 2,
+          { isStatic: true, label: 'leftWall' }
+        );
+        
+        // Right wall
+        rightWall = window.Matter.Bodies.rectangle(
+          width + wallThickness / 2,
+          height / 2,
+          wallThickness,
+          height * 2,
+          { isStatic: true, label: 'rightWall' }
+        );
+        
+        // Top wall (invisible ceiling)
+        topWall = window.Matter.Bodies.rectangle(
+          width / 2,
+          -wallThickness / 2,
+          width,
+          wallThickness,
+          { isStatic: true, label: 'topWall' }
+        );
+        
+        window.Matter.World.add(world, [ground, leftWall, rightWall, topWall]);
       }
 
       // Color palette
@@ -200,6 +251,10 @@
         
         // Function to get consistent color for a task based on its ID
         const getTaskColor = (task) => {
+          // Backlog tasks get gray background
+          if (task.status === 'backlog') {
+            return '#999999';
+          }
           return colors[task.id % colors.length];
         };
         
@@ -209,8 +264,8 @@
         }
         
         const blockWidth = 250;
-        const minHeight = 50;
-        const maxHeight = 250;
+        const minHeight = minBlockHeight;
+        const maxHeight = maxBlockHeight;
         
         // Determine which tasks to show based on presentation step
         let visibleTasks = [];
@@ -226,13 +281,17 @@
           // Step 2: "todo" and "partlydone" on left, "done" and "partlydone" on right
           visibleTasks = tasks.filter(t => t.status === 'todo' || t.status === 'partlydone');
           doneTasksForRightStack = tasks.filter(t => t.status === 'done' || t.status === 'partlydone');
+        } else if (presentationStep === 3) {
+          // Step 3: "todo", "partlydone", "nexttodo" on left, "backlog" on right
+          visibleTasks = tasks.filter(t => t.status === 'todo' || t.status === 'partlydone' || t.status === 'nexttodo');
+          doneTasksForRightStack = tasks.filter(t => t.status === 'backlog');
         }
         
         // Determine stack positions
-        const isTwoStacks = presentationStep === 2 && doneTasksForRightStack.length > 0;
-        // In steps 1 and 2, use left position (25%). In step 0, use center
-        const todoStackX = presentationStep >= 1 ? width * 0.25 : width / 2;
-        const doneStackX = width * 0.75;
+        const isTwoStacks = (presentationStep === 2 || presentationStep === 3) && doneTasksForRightStack.length > 0;
+        // In steps 1, 2, and 3, use configurable positions. In step 0, use center
+        const todoStackX = presentationStep >= 1 ? (width * leftStackX / 100) : width / 2;
+        const doneStackX = width * rightStackX / 100;
         
         // Create/update TO-DO stack (left/center)
         visibleTasks.forEach((task, index) => {
@@ -362,13 +421,32 @@
           
           // Keep blocks within horizontal bounds
           const halfWidth = body.displayWidth / 2;
-          if (body.position.x - halfWidth < 20) {
-            window.Matter.Body.setPosition(body, { x: 20 + halfWidth, y: body.position.y });
-            window.Matter.Body.setVelocity(body, { x: 0, y: body.velocity.y });
+          const halfHeight = body.displayHeight / 2;
+          const margin = 10;
+          
+          // Left boundary
+          if (body.position.x - halfWidth < margin) {
+            window.Matter.Body.setPosition(body, { x: margin + halfWidth, y: body.position.y });
+            window.Matter.Body.setVelocity(body, { x: Math.abs(body.velocity.x) * 0.3, y: body.velocity.y });
           }
-          if (body.position.x + halfWidth > width - 20) {
-            window.Matter.Body.setPosition(body, { x: width - 20 - halfWidth, y: body.position.y });
-            window.Matter.Body.setVelocity(body, { x: 0, y: body.velocity.y });
+          
+          // Right boundary
+          if (body.position.x + halfWidth > width - margin) {
+            window.Matter.Body.setPosition(body, { x: width - margin - halfWidth, y: body.position.y });
+            window.Matter.Body.setVelocity(body, { x: -Math.abs(body.velocity.x) * 0.3, y: body.velocity.y });
+          }
+          
+          // Top boundary (prevent blocks from going off-screen at top)
+          if (body.position.y - halfHeight < margin) {
+            window.Matter.Body.setPosition(body, { x: body.position.x, y: margin + halfHeight });
+            window.Matter.Body.setVelocity(body, { x: body.velocity.x, y: Math.abs(body.velocity.y) * 0.5 });
+          }
+          
+          // Bottom boundary (above the ground and labels)
+          const maxY = height - 100; // Keep above labels (80 for ground + 20 margin)
+          if (body.position.y + halfHeight > maxY) {
+            window.Matter.Body.setPosition(body, { x: body.position.x, y: maxY - halfHeight });
+            window.Matter.Body.setVelocity(body, { x: body.velocity.x, y: -Math.abs(body.velocity.y) * 0.3 });
           }
         });
         
@@ -415,10 +493,14 @@
         }
 
       if (overlayEnabled && tasks.length > 0) {
-        // Only initialize blocks when tasks actually change (include presentationStep and statuses in comparison)
+        // Only initialize blocks when tasks actually change (include presentationStep, statuses, and settings in comparison)
         const currentTasksJson = JSON.stringify({ 
           tasks: tasks.map(t => ({ id: t.id, size: t.size, status: t.status })),
-          step: presentationStep
+          step: presentationStep,
+          leftStackX: leftStackX,
+          rightStackX: rightStackX,
+          minBlockHeight: minBlockHeight,
+          maxBlockHeight: maxBlockHeight
         });
         if (currentTasksJson !== lastTasksJson) {
           initBlockBodies(canvas.width, canvas.height);
@@ -430,31 +512,66 @@
           updatePhysics(canvas.width, canvas.height);
         }
         
-        // Save context and apply horizontal flip for overlay
+        // Save context and optionally apply horizontal flip for overlay
         ctx.save();
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
+        if (mirrorHorizontally) {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
         
-        // Draw labels for step 1 and 2
-        if (presentationStep >= 1) {
+        // Draw labels for steps 1, 2, and 3 (at bottom with white background)
+        if (presentationStep >= 1 && presentationStep <= 3) {
           ctx.save();
           ctx.shadowColor = 'transparent';
-          ctx.fillStyle = 'white';
-          ctx.font = 'bold 28px Arial';
+          ctx.font = 'bold 24px "Google Sans", Arial, sans-serif';
           ctx.textAlign = 'center';
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-          ctx.lineWidth = 3;
+          ctx.textBaseline = 'middle';
           
-          // TO-DO label (left side) - shown in both step 1 and 2
-          const todoX = canvas.width * 0.25;
-          ctx.strokeText('TO-DO YESTERDAY', todoX, 50);
-          ctx.fillText('TO-DO YESTERDAY', todoX, 50);
+          const leftX = canvas.width * leftStackX / 100;
+          const rightX = canvas.width * rightStackX / 100;
+          const labelY = canvas.height - 40; // Position near bottom
           
-          // DONE label (right side) - only in step 2
-          if (presentationStep === 2) {
-            const doneX = canvas.width * 0.75;
-            ctx.strokeText('DONE YESTERDAY', doneX, 50);
-            ctx.fillText('DONE YESTERDAY', doneX, 50);
+          // Helper function to draw label with background
+          const drawLabel = (text, x) => {
+            const padding = 20;
+            const textMetrics = ctx.measureText(text);
+            const textWidth = textMetrics.width;
+            const boxWidth = textWidth + padding * 2;
+            const boxHeight = 36;
+            const radius = 18; // Rounded corners
+            
+            // Draw white background with rounded corners
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(x - boxWidth/2 + radius, labelY - boxHeight/2);
+            ctx.lineTo(x + boxWidth/2 - radius, labelY - boxHeight/2);
+            ctx.quadraticCurveTo(x + boxWidth/2, labelY - boxHeight/2, x + boxWidth/2, labelY - boxHeight/2 + radius);
+            ctx.lineTo(x + boxWidth/2, labelY + boxHeight/2 - radius);
+            ctx.quadraticCurveTo(x + boxWidth/2, labelY + boxHeight/2, x + boxWidth/2 - radius, labelY + boxHeight/2);
+            ctx.lineTo(x - boxWidth/2 + radius, labelY + boxHeight/2);
+            ctx.quadraticCurveTo(x - boxWidth/2, labelY + boxHeight/2, x - boxWidth/2, labelY + boxHeight/2 - radius);
+            ctx.lineTo(x - boxWidth/2, labelY - boxHeight/2 + radius);
+            ctx.quadraticCurveTo(x - boxWidth/2, labelY - boxHeight/2, x - boxWidth/2 + radius, labelY - boxHeight/2);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw black text
+            ctx.fillStyle = 'black';
+            ctx.fillText(text, x, labelY);
+          };
+          
+          // Step-specific labels
+          if (presentationStep === 1) {
+            // Step 1: TO-DO YESTERDAY (left only)
+            drawLabel('TO-DO YESTERDAY', leftX);
+          } else if (presentationStep === 2) {
+            // Step 2: TO-DO YESTERDAY (left), DONE YESTERDAY (right)
+            drawLabel('TO-DO YESTERDAY', leftX);
+            drawLabel('DONE YESTERDAY', rightX);
+          } else if (presentationStep === 3) {
+            // Step 3: TO-DO TODAY (left), BACKLOG (right)
+            drawLabel('TO-DO TODAY', leftX);
+            drawLabel('BACKLOG', rightX);
           }
           
           ctx.restore();
@@ -464,25 +581,46 @@
         tasks.forEach(task => {
           const body = bubbleBodies.get(task.id);
           if (body) {
-            // In step 1: no progress bar. In step 2: show remaining work (todo mode)
-            const progressMode = presentationStep === 1 ? 'none' : (presentationStep === 2 ? 'todo' : 'none');
+            // Progress mode: none for steps 1 and 3, 'todo' for step 2
+            const progressMode = presentationStep === 2 ? 'todo' : 'none';
             drawBlock(ctx, task, body.position.x, body.position.y, body.displayWidth, body.displayHeight, body.angle, body.color, progressMode);
           }
         });
         
-        // Draw DONE stack blocks (only in step 2)
-        if (presentationStep === 2) {
+        // Draw right stack blocks (step 2: DONE, step 3: BACKLOG)
+        if (presentationStep === 2 || presentationStep === 3) {
           doneBubbleBodies.forEach((body, taskId) => {
             const task = tasks.find(t => t.id === taskId);
             if (task) {
-              // In done stack: show completed work (done mode)
-              drawBlock(ctx, task, body.position.x, body.position.y, body.displayWidth, body.displayHeight, body.angle, body.color, 'done');
+              // Progress mode: 'done' for step 2, 'none' for step 3
+              const progressMode = presentationStep === 2 ? 'done' : 'none';
+              drawBlock(ctx, task, body.position.x, body.position.y, body.displayWidth, body.displayHeight, body.angle, body.color, progressMode);
             }
           });
         }
         
-        // Total in corner
-        const total = tasks.reduce((sum, t) => sum + t.size, 0);
+        // Total in corner - calculate based on presentation step
+        let total = 0;
+        if (presentationStep === 1) {
+          // Step 1: Count left stack (todo, done, partlydone)
+          total = tasks
+            .filter(t => t.status === 'todo' || t.status === 'done' || t.status === 'partlydone')
+            .reduce((sum, t) => sum + t.size, 0);
+        } else if (presentationStep === 2) {
+          // Step 2: Count right stack (done, partlydone)
+          total = tasks
+            .filter(t => t.status === 'done' || t.status === 'partlydone')
+            .reduce((sum, t) => sum + t.size, 0);
+        } else if (presentationStep === 3) {
+          // Step 3: Count left stack (todo, partlydone, nexttodo)
+          total = tasks
+            .filter(t => t.status === 'todo' || t.status === 'partlydone' || t.status === 'nexttodo')
+            .reduce((sum, t) => sum + t.size, 0);
+        } else {
+          // Step 0 or other: Count all tasks
+          total = tasks.reduce((sum, t) => sum + t.size, 0);
+        }
+        
         ctx.shadowColor = 'transparent';
         ctx.fillStyle = total > 100 ? '#dc3545' : '#28a745';
         ctx.font = 'bold 24px Arial';
@@ -512,7 +650,8 @@
       ctx.shadowOffsetY = 3;
       
       // Draw rounded rectangle (background for progress bar if partlydone)
-      const radius = 25;
+      // Radius is 50% of height for pill-shaped blocks
+      const radius = height / 2;
       
       // If task is partlydone AND progressMode is not 'none', draw progress bar
       if (task.status === 'partlydone' && task.percentComplete !== undefined && progressMode !== 'none') {
@@ -593,14 +732,14 @@
       
       ctx.shadowColor = 'transparent'; // Turn off shadow for text
       
-      // Draw text
-      ctx.fillStyle = 'white';
+      // Draw text - use black for better readability
+      ctx.fillStyle = 'black';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       // Task name
-      const fontSize = Math.min(20, height / 4);
-      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      const fontSize = Math.min(25, height / 3);
+      ctx.font = `bold ${fontSize}px "Google Sans", Arial, sans-serif`;
       
       // Word wrap for longer text
       const words = task.text.split(' ');
@@ -630,8 +769,8 @@
       });
       
       // Percentage below
-      ctx.font = `bold ${fontSize - 2}px Arial`;
-      ctx.fillText(`${task.size}%`, 0, height / 2 - fontSize);
+ /*      ctx.font = `bold ${fontSize - 2}px Arial`;
+      ctx.fillText(`${task.size}%`, 0, height / 2 - fontSize); */
       
       // Draw checkmark if completed
       if (task.completed) {

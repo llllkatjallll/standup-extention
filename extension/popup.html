@@ -1,137 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Standup Overlay</title>
-  <link rel="stylesheet" href="popup.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standup Overlay</title>
+    <link rel="stylesheet" href="popup.css">
 </head>
+
 <body>
-  <div class="container">
-    <h1>📋 Standup Tasks</h1>
-    
-    <!-- Tab Navigation -->
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="tasks">Tasks</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Standup Tasks</h1>
+            <button class="settings-icon-btn" id="openSettingsBtn" title="Settings">⚙️</button>
+        </div>
+
+        <!-- Tasks Section -->
+        <div class="content-section active" id="tasks-section">
+            <!-- Presentation Mode Controls -->
+            <div class="presentation-mode">
+                <h3>🎤 Daily Standup Steps</h3>
+                <div class="step-buttons">
+                    <!-- <button class="step-btn" data-step="0">Reset</button> -->
+          <button class="step-btn active" data-step="1">1. Yesterday's Tasks</button>
+          <button class="step-btn" data-step="2">2. Show Progress</button>
+          <button class="step-btn" data-step="3">3. Today's Plan</button>
+                </div>
+
+                <div class="controls">
+                    <label class="toggle">
+                        <input type="checkbox" id="overlayEnabled" checked>
+                        <span>Show overlay in meetings</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="add-task-section">
+                <input type="text" id="taskInput" placeholder="Add a task..." />
+                <input type="number" id="taskSize" placeholder="%" min="1" max="100" value="10" />
+                <button id="addTaskBtn">+</button>
+            </div>
+
+            <!-- Status Filters -->
+            <div class="status-filters">
+                <div class="filter-pill active" data-status="all">
+                    <span class="pill-icon">✨</span>
+                    <span class="pill-label">All</span>
+                    <span class="pill-count" id="count-all">0</span>
+                </div>
+                <div class="filter-pill" data-status="todo">
+                    <span class="pill-icon">📋</span>
+                    <span class="pill-label">To-Do</span>
+                    <span class="pill-count" id="count-todo">0</span>
+                </div>
+                <div class="filter-pill" data-status="done">
+                    <span class="pill-icon">✅</span>
+                    <span class="pill-label">Done</span>
+                    <span class="pill-count" id="count-done">0</span>
+                </div>
+                <div class="filter-pill" data-status="partlydone">
+                    <span class="pill-icon">⏸️</span>
+                    <span class="pill-label">Partly</span>
+                    <span class="pill-count" id="count-partlydone">0</span>
+                </div>
+                <div class="filter-pill" data-status="nexttodo">
+                    <span class="pill-icon">⏭️</span>
+                    <span class="pill-label">Next</span>
+                    <span class="pill-count" id="count-nexttodo">0</span>
+                </div>
+
+                <div class="filter-pill" data-status="backlog">
+                    <span class="pill-icon">📦</span>
+                    <span class="pill-label">Backlog</span>
+                    <span class="pill-count" id="count-backlog">0</span>
+                </div>
+
+            </div>
+
+            <div class="tasks-list" id="tasksList"></div>
+
+            <div class="stats">
+                <div class="stat-item">
+                    <span>Total:</span>
+                    <strong id="totalProgress">0%</strong>
+                </div>
+            </div>
+
+
+
+        </div>
+
+        <!-- Settings Section -->
+        <div class="content-section" id="settings-section">
+            <div class="settings-header">
+                <h2>⚙️ Settings</h2>
+                <button class="close-settings-btn" id="closeSettingsBtn" title="Close">✕</button>
+            </div>
+            
+            <div class="settings-section">
+                <h3>📍 Stack Positions</h3>
+                <p class="setting-description">Adjust the horizontal position of left and right stacks</p>
+
+                <div class="setting-control">
+                    <label for="leftStackX">Left Stack Position:</label>
+                    <div class="slider-container">
+                        <input type="range" id="leftStackX" min="10" max="40" value="25" step="1">
+                        <span id="leftStackXValue">25%</span>
+                    </div>
+                </div>
+
+                <div class="setting-control">
+                    <label for="rightStackX">Right Stack Position:</label>
+                    <div class="slider-container">
+                        <input type="range" id="rightStackX" min="60" max="90" value="75" step="1">
+                        <span id="rightStackXValue">75%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>📏 Task Block Heights</h3>
+                <p class="setting-description">Control the minimum and maximum height of task blocks</p>
+
+                <div class="setting-control">
+                    <label for="minBlockHeight">Minimum Block Height:</label>
+                    <div class="slider-container">
+                        <input type="range" id="minBlockHeight" min="30" max="100" value="50" step="5">
+                        <span id="minBlockHeightValue">50px</span>
+                    </div>
+                </div>
+
+                <div class="setting-control">
+                    <label for="maxBlockHeight">Maximum Block Height:</label>
+                    <div class="slider-container">
+                        <input type="range" id="maxBlockHeight" min="150" max="400" value="250" step="10">
+                        <span id="maxBlockHeightValue">250px</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>🔄 Display Options</h3>
+                <p class="setting-description">Control how the overlay is displayed</p>
+
+                <div class="setting-control">
+                    <label class="toggle">
+                        <input type="checkbox" id="mirrorHorizontally" checked>
+                        <span>Mirror overlay horizontally</span>
+                    </label>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Tasks Tab -->
-    <div class="tab-content active" id="tasks-tab">
-      <!-- Presentation Mode Controls -->
-      <div class="presentation-mode">
-        <h3>🎤 Daily Standup</h3>
-        <div class="step-buttons">
-          <button class="step-btn" data-step="0">Reset</button>
-          <button class="step-btn" data-step="1">1. Yesterday's Tasks</button>
-          <button class="step-btn active" data-step="2">2. Show Progress</button>
-          <button class="step-btn disabled" data-step="3">3. Today (Coming Soon)</button>
-          <button class="step-btn disabled" data-step="4">4. Blockers (Coming Soon)</button>
-        </div>
-        <div class="current-step">Current: <strong id="currentStepLabel">Editing Tasks</strong></div>
-      </div>
-
-      <div class="add-task-section">
-        <input type="text" id="taskInput" placeholder="Add a task..." />
-        <input type="number" id="taskSize" placeholder="%" min="1" max="100" value="10" />
-        <button id="addTaskBtn">+</button>
-      </div>
-
-      <div class="tasks-list" id="tasksList"></div>
-
-      <div class="stats">
-        <div class="stat-item">
-          <span>Total:</span>
-          <strong id="totalProgress">0%</strong>
-        </div>
-      </div>
-
-      <div class="controls">
-        <label class="toggle">
-          <input type="checkbox" id="overlayEnabled" checked>
-          <span>Show overlay in meetings</span>
-        </label>
-      </div>
-
-      <div class="info">
-        <p><strong>How to use:</strong></p>
-        <ol>
-          <li>Add your standup tasks here</li>
-          <li>Join your meeting (Meet/Zoom/Teams)</li>
-          <li>Turn on your camera</li>
-          <li>Your tasks will appear as bubbles!</li>
-        </ol>
-        <p><small>Mark tasks complete during your standup by clicking them</small></p>
-      </div>
-    </div>
-
-    <!-- Settings Tab -->
-    <div class="tab-content" id="settings-tab">
-      <div class="settings-section">
-        <h3>💫 Safe Space</h3>
-        <p class="setting-description">Adjust the area in the center where bubbles won't appear (for your head)</p>
-        
-        <div class="setting-control">
-          <label for="safeZoneSize">Safe zone size:</label>
-          <div class="slider-container">
-            <input type="range" id="safeZoneSize" min="0" max="400" value="200" step="10">
-            <span id="safeZoneSizeValue">200px</span>
-          </div>
-        </div>
-
-        <div class="setting-control">
-          <label for="safeZoneOffsetX">Horizontal position:</label>
-          <div class="slider-container">
-            <input type="range" id="safeZoneOffsetX" min="-300" max="300" value="0" step="10">
-            <span id="safeZoneOffsetXValue">0px</span>
-          </div>
-        </div>
-
-        <div class="setting-control">
-          <label for="safeZoneOffsetY">Vertical position:</label>
-          <div class="slider-container">
-            <input type="range" id="safeZoneOffsetY" min="-200" max="200" value="0" step="10">
-            <span id="safeZoneOffsetYValue">0px</span>
-          </div>
-        </div>
-
-        <div class="setting-preview">
-          <svg width="150" height="150" viewBox="0 0 150 150">
-            <circle cx="75" cy="75" r="70" fill="#f0f0f0" stroke="#ddd" stroke-width="2"/>
-            <circle id="previewCircle" cx="75" cy="75" r="35" fill="rgba(102, 126, 234, 0.2)" stroke="#667eea" stroke-width="2" stroke-dasharray="5,5"/>
-            <text x="75" y="75" text-anchor="middle" dominant-baseline="middle" fill="#667eea" font-size="12">Safe Zone</text>
-          </svg>
-          <p class="preview-label">Preview (your video)</p>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <h3>🎯 Bubble Sizes</h3>
-        <p class="setting-description">Control the minimum and maximum size of task bubbles</p>
-        
-        <div class="setting-control">
-          <label for="minBubbleSize">Minimum bubble size:</label>
-          <div class="slider-container">
-            <input type="range" id="minBubbleSize" min="20" max="100" value="40" step="5">
-            <span id="minBubbleSizeValue">40px</span>
-          </div>
-        </div>
-
-        <div class="setting-control">
-          <label for="maxBubbleSize">Maximum bubble size:</label>
-          <div class="slider-container">
-            <input type="range" id="maxBubbleSize" min="80" max="300" value="200" step="10">
-            <span id="maxBubbleSizeValue">200px</span>
-          </div>
-        </div>
-
-        <div class="info">
-          <p><small>💡 Task bubbles scale between min and max based on their percentage value</small></p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="popup.js"></script>
+    <script src="popup.js"></script>
 </body>
+
 </html>

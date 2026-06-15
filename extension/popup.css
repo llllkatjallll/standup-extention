@@ -6,7 +6,7 @@
 
 body {
   width: 400px;
-  min-height: 500px;
+  min-height: 95vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
@@ -15,48 +15,82 @@ body {
   padding: 20px;
 }
 
+/* Header with settings icon */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
 h1 {
   font-size: 20px;
   color: white;
-  margin-bottom: 15px;
-  text-align: center;
-}
-
-/* Tabs */
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 15px;
-}
-
-.tab-btn {
+  margin: 0;
   flex: 1;
-  padding: 10px;
+}
+
+.settings-icon-btn {
+  width: 36px;
+  height: 36px;
   border: none;
   background: rgba(255, 255, 255, 0.2);
   color: white;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 18px;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.tab-btn:hover {
+.settings-icon-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
-.tab-btn.active {
-  background: white;
-  color: #667eea;
-}
-
-.tab-content {
+/* Content sections */
+.content-section {
   display: none;
 }
 
-.tab-content.active {
+.content-section.active {
   display: block;
+}
+
+/* Settings header with close button */
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.settings-header h2 {
+  font-size: 20px;
+  color: white;
+  margin: 0;
+}
+
+.close-settings-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-settings-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
 .add-task-section {
@@ -99,8 +133,90 @@ h1 {
   transform: scale(1.05);
 }
 
+/* Status Filters */
+.status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 15px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
+.filter-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.3);
+  border: 2px solid transparent;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.filter-pill:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.filter-pill.active {
+  background: white;
+  color: #667eea;
+  border-color: white;
+}
+
+.filter-pill.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.filter-pill:not(.active):not(.disabled) {
+  opacity: 0.7;
+}
+
+.pill-icon {
+  font-size: 14px;
+}
+
+.pill-label {
+  font-size: 12px;
+}
+
+.pill-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(102, 126, 234, 0.2);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.filter-pill.active .pill-count {
+  background: rgba(102, 126, 234, 0.15);
+  color: #667eea;
+}
+
+/* Empty state for filtered results */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-style: italic;
+}
+
 .tasks-list {
-  max-height: 300px;
+  /* max-height: 300px; */
   overflow-y: auto;
   margin-bottom: 15px;
   display: flex;
@@ -121,7 +237,7 @@ h1 {
 }
 
 .task-item:hover {
-  transform: translateX(5px);
+ background: rgb(189, 237, 216);
 }
 
 .task-item.completed {
@@ -130,16 +246,14 @@ h1 {
 }
 
 .task-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  margin-bottom: 8px;
 }
 
 .task-text {
-  flex: 1;
   font-size: 14px;
   color: #333;
   font-weight: 500;
+  line-height: 1.4;
 }
 
 .task-item.completed .task-text {
@@ -152,26 +266,33 @@ h1 {
   gap: 5px;
 }
 
-.task-actions button {
-  padding: 4px 8px;
-  border: none;
-  border-radius: 5px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.complete-btn {
-  background: #28a745;
-  color: white;
-}
-
 .delete-btn {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
   background: #dc3545;
   color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
 }
 
-.task-size {
+.delete-btn:hover {
+  background: #c82333;
+  transform: scale(1.05);
+}
+
+/* Task size display in status control */
+.task-status-control .task-size {
+  font-size: 13px;
+  font-weight: 600;
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+/* Original task-size bar (keep for reference) */
+.size-bar-container .task-size {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -248,33 +369,7 @@ h1 {
   cursor: pointer;
 }
 
-.info {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 10px;
-  padding: 12px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #333;
-}
 
-.info strong {
-  color: #667eea;
-  display: block;
-  margin-bottom: 8px;
-}
-
-.info ol {
-  margin-left: 20px;
-  margin-bottom: 8px;
-}
-
-.info li {
-  margin-bottom: 4px;
-}
-
-.info small {
-  color: #666;
-}
 
 /* Scrollbar */
 .tasks-list::-webkit-scrollbar {
@@ -409,7 +504,7 @@ h1 {
 
 .step-buttons {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -461,9 +556,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
+  padding-top: 0;
 }
 
 .task-status-control label {
@@ -474,6 +567,7 @@ h1 {
 
 .status-select {
   flex: 1;
+  min-width: 0;
   padding: 6px 10px;
   border: 1px solid #ddd;
   border-radius: 6px;

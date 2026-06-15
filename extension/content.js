@@ -35,11 +35,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       type: 'STANDUP_UPDATE_TASKS',
       tasks: message.tasks,
       overlayEnabled: message.overlayEnabled,
-      safeZoneSize: message.safeZoneSize,
-      safeZoneOffsetX: message.safeZoneOffsetX,
-      safeZoneOffsetY: message.safeZoneOffsetY,
-      minBubbleSize: message.minBubbleSize,
-      maxBubbleSize: message.maxBubbleSize,
+      leftStackX: message.leftStackX,
+      rightStackX: message.rightStackX,
+      minBlockHeight: message.minBlockHeight,
+      maxBlockHeight: message.maxBlockHeight,
+      mirrorHorizontally: message.mirrorHorizontally,
       presentationStep: message.presentationStep
     }, '*');
   }
@@ -48,17 +48,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Load tasks on page load and send to injected script
 // Wait a bit to ensure injected script is ready
 setTimeout(() => {
-  chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize'], (data) => {
+  chrome.storage.local.get(['tasks', 'overlayEnabled', 'leftStackX', 'rightStackX', 'minBlockHeight', 'maxBlockHeight', 'mirrorHorizontally'], (data) => {
     console.log('Standup Overlay: Sending initial tasks to page', data.tasks?.length || 0);
     window.postMessage({
       type: 'STANDUP_INIT',
       tasks: data.tasks || [],
       overlayEnabled: data.overlayEnabled !== false,
-      safeZoneSize: data.safeZoneSize !== undefined ? data.safeZoneSize : 200,
-      safeZoneOffsetX: data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0,
-      safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0,
-      minBubbleSize: data.minBubbleSize !== undefined ? data.minBubbleSize : 40,
-      maxBubbleSize: data.maxBubbleSize !== undefined ? data.maxBubbleSize : 200
+      leftStackX: data.leftStackX !== undefined ? data.leftStackX : 25,
+      rightStackX: data.rightStackX !== undefined ? data.rightStackX : 75,
+      minBlockHeight: data.minBlockHeight !== undefined ? data.minBlockHeight : 50,
+      maxBlockHeight: data.maxBlockHeight !== undefined ? data.maxBlockHeight : 250,
+      mirrorHorizontally: data.mirrorHorizontally !== undefined ? data.mirrorHorizontally : true
     }, '*');
   });
 }, 100);
@@ -66,16 +66,16 @@ setTimeout(() => {
 // Listen for storage changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local') {
-    chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize'], (data) => {
+    chrome.storage.local.get(['tasks', 'overlayEnabled', 'leftStackX', 'rightStackX', 'minBlockHeight', 'maxBlockHeight', 'mirrorHorizontally'], (data) => {
       window.postMessage({
         type: 'STANDUP_UPDATE_TASKS',
         tasks: data.tasks || [],
         overlayEnabled: data.overlayEnabled !== false,
-        safeZoneSize: data.safeZoneSize !== undefined ? data.safeZoneSize : 200,
-        safeZoneOffsetX: data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0,
-        safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0,
-        minBubbleSize: data.minBubbleSize !== undefined ? data.minBubbleSize : 40,
-        maxBubbleSize: data.maxBubbleSize !== undefined ? data.maxBubbleSize : 200
+        leftStackX: data.leftStackX !== undefined ? data.leftStackX : 25,
+        rightStackX: data.rightStackX !== undefined ? data.rightStackX : 75,
+        minBlockHeight: data.minBlockHeight !== undefined ? data.minBlockHeight : 50,
+        maxBlockHeight: data.maxBlockHeight !== undefined ? data.maxBlockHeight : 250,
+        mirrorHorizontally: data.mirrorHorizontally !== undefined ? data.mirrorHorizontally : true
       }, '*');
     });
   }

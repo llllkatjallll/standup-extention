@@ -3,157 +3,154 @@ class TaskManager {
   constructor() {
     this.tasks = [];
     this.nextId = 1;
-    this.presentationStep = 0; // 0=editing, 1=yesterday, 2=progress, 3=today, 4=blockers
+    this.presentationStep = 1; // Start at step 1 (Yesterday's Tasks)
+    this.activeFilter = 'all'; // Single filter: 'all' or specific status
     this.init();
   }
 
   async init() {
     await this.loadTasks();
     this.setupEventListeners();
-    this.setupTabs();
+    this.setupFilterPills();
+    this.setupSettingsToggle();
     this.setupSettings();
     this.render();
   }
 
-  setupTabs() {
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
-
-    tabBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tabName = btn.dataset.tab;
+  setupFilterPills() {
+    const filterPills = document.querySelectorAll('.filter-pill');
+    
+    filterPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        const status = pill.dataset.status;
         
-        // Update active tab button
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+        // Don't allow clicking disabled pills
+        if (pill.classList.contains('disabled')) return;
         
-        // Update active tab content
-        tabContents.forEach(content => {
-          if (content.id === `${tabName}-tab`) {
-            content.classList.add('active');
-          } else {
-            content.classList.remove('active');
-          }
-        });
+        // Set this as the active filter (single select)
+        this.activeFilter = status;
+        
+        // Update UI
+        filterPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        
+        this.render();
       });
     });
   }
 
-  setupSettings() {
-    const safeZoneSlider = document.getElementById('safeZoneSize');
-    const safeZoneValue = document.getElementById('safeZoneSizeValue');
-    const offsetXSlider = document.getElementById('safeZoneOffsetX');
-    const offsetXValue = document.getElementById('safeZoneOffsetXValue');
-    const offsetYSlider = document.getElementById('safeZoneOffsetY');
-    const offsetYValue = document.getElementById('safeZoneOffsetYValue');
-    const minSizeSlider = document.getElementById('minBubbleSize');
-    const minSizeValue = document.getElementById('minBubbleSizeValue');
-    const maxSizeSlider = document.getElementById('maxBubbleSize');
-    const maxSizeValue = document.getElementById('maxBubbleSizeValue');
-    const previewCircle = document.getElementById('previewCircle');
+  setupSettingsToggle() {
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const tasksSection = document.getElementById('tasks-section');
+    const settingsSection = document.getElementById('settings-section');
 
-    // Load saved values
-    chrome.storage.local.get(['safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize'], (data) => {
-      const size = data.safeZoneSize !== undefined ? data.safeZoneSize : 200;
-      const offsetX = data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0;
-      const offsetY = data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0;
-      
-      safeZoneSlider.value = size;
-      safeZoneValue.textContent = `${size}px`;
-      offsetXSlider.value = offsetX;
-      offsetXValue.textContent = `${offsetX}px`;
-      offsetYSlider.value = offsetY;
-      offsetYValue.textContent = `${offsetY}px`;
-      
-      const minSize = data.minBubbleSize !== undefined ? data.minBubbleSize : 40;
-      const maxSize = data.maxBubbleSize !== undefined ? data.maxBubbleSize : 200;
-      minSizeSlider.value = minSize;
-      minSizeValue.textContent = `${minSize}px`;
-      maxSizeSlider.value = maxSize;
-      maxSizeValue.textContent = `${maxSize}px`;
-      
-      this.updatePreview(size, offsetX, offsetY);
+    openSettingsBtn.addEventListener('click', () => {
+      tasksSection.classList.remove('active');
+      settingsSection.classList.add('active');
     });
 
-    safeZoneSlider.addEventListener('input', (e) => {
-      const size = parseInt(e.target.value);
-      safeZoneValue.textContent = `${size}px`;
-      this.updatePreview(size, parseInt(offsetXSlider.value), parseInt(offsetYSlider.value));
-    });
-
-    safeZoneSlider.addEventListener('change', (e) => {
-      const size = parseInt(e.target.value);
-      this.saveSettings({ safeZoneSize: size });
-      this.notifyContentScript();
-    });
-
-    offsetXSlider.addEventListener('input', (e) => {
-      const offsetX = parseInt(e.target.value);
-      offsetXValue.textContent = `${offsetX}px`;
-      this.updatePreview(parseInt(safeZoneSlider.value), offsetX, parseInt(offsetYSlider.value));
-    });
-
-    offsetXSlider.addEventListener('change', (e) => {
-      const offsetX = parseInt(e.target.value);
-      this.saveSettings({ safeZoneOffsetX: offsetX });
-      this.notifyContentScript();
-    });
-
-    offsetYSlider.addEventListener('input', (e) => {
-      const offsetY = parseInt(e.target.value);
-      offsetYValue.textContent = `${offsetY}px`;
-      this.updatePreview(parseInt(safeZoneSlider.value), parseInt(offsetXSlider.value), offsetY);
-    });
-
-    offsetYSlider.addEventListener('change', (e) => {
-      const offsetY = parseInt(e.target.value);
-      this.saveSettings({ safeZoneOffsetY: offsetY });
-      this.notifyContentScript();
-    });
-
-    minSizeSlider.addEventListener('input', (e) => {
-      const minSize = parseInt(e.target.value);
-      minSizeValue.textContent = `${minSize}px`;
-      // Ensure min doesn't exceed max
-      if (minSize >= parseInt(maxSizeSlider.value)) {
-        maxSizeSlider.value = minSize + 20;
-        maxSizeValue.textContent = `${minSize + 20}px`;
-      }
-    });
-
-    minSizeSlider.addEventListener('change', (e) => {
-      const minSize = parseInt(e.target.value);
-      this.saveSettings({ minBubbleSize: minSize });
-      this.notifyContentScript();
-    });
-
-    maxSizeSlider.addEventListener('input', (e) => {
-      const maxSize = parseInt(e.target.value);
-      maxSizeValue.textContent = `${maxSize}px`;
-      // Ensure max doesn't go below min
-      if (maxSize <= parseInt(minSizeSlider.value)) {
-        minSizeSlider.value = maxSize - 20;
-        minSizeValue.textContent = `${maxSize - 20}px`;
-      }
-    });
-
-    maxSizeSlider.addEventListener('change', (e) => {
-      const maxSize = parseInt(e.target.value);
-      this.saveSettings({ maxBubbleSize: maxSize });
-      this.notifyContentScript();
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsSection.classList.remove('active');
+      tasksSection.classList.add('active');
     });
   }
 
-  updatePreview(size, offsetX, offsetY) {
-    const previewCircle = document.getElementById('previewCircle');
-    // Scale to preview (150px SVG = ~700px video, so radius scaled down)
-    const previewRadius = (size / 700) * 70;
-    const previewOffsetX = (offsetX / 700) * 70;
-    const previewOffsetY = (offsetY / 700) * 70;
-    
-    previewCircle.setAttribute('r', Math.max(5, Math.min(70, previewRadius)));
-    previewCircle.setAttribute('cx', 75 + previewOffsetX);
-    previewCircle.setAttribute('cy', 75 + previewOffsetY);
+  setupSettings() {
+    const leftStackXSlider = document.getElementById('leftStackX');
+    const leftStackXValue = document.getElementById('leftStackXValue');
+    const rightStackXSlider = document.getElementById('rightStackX');
+    const rightStackXValue = document.getElementById('rightStackXValue');
+    const minHeightSlider = document.getElementById('minBlockHeight');
+    const minHeightValue = document.getElementById('minBlockHeightValue');
+    const maxHeightSlider = document.getElementById('maxBlockHeight');
+    const maxHeightValue = document.getElementById('maxBlockHeightValue');
+
+    // Mirror toggle
+    const mirrorToggle = document.getElementById('mirrorHorizontally');
+
+    // Load saved values
+    chrome.storage.local.get(['leftStackX', 'rightStackX', 'minBlockHeight', 'maxBlockHeight', 'mirrorHorizontally'], (data) => {
+      const leftX = data.leftStackX !== undefined ? data.leftStackX : 25;
+      const rightX = data.rightStackX !== undefined ? data.rightStackX : 75;
+      const minHeight = data.minBlockHeight !== undefined ? data.minBlockHeight : 50;
+      const maxHeight = data.maxBlockHeight !== undefined ? data.maxBlockHeight : 250;
+      const mirror = data.mirrorHorizontally !== undefined ? data.mirrorHorizontally : true;
+      
+      leftStackXSlider.value = leftX;
+      leftStackXValue.textContent = `${leftX}%`;
+      rightStackXSlider.value = rightX;
+      rightStackXValue.textContent = `${rightX}%`;
+      minHeightSlider.value = minHeight;
+      minHeightValue.textContent = `${minHeight}px`;
+      maxHeightSlider.value = maxHeight;
+      maxHeightValue.textContent = `${maxHeight}px`;
+      mirrorToggle.checked = mirror;
+    });
+
+    // Left Stack X
+    leftStackXSlider.addEventListener('input', (e) => {
+      const value = parseInt(e.target.value);
+      leftStackXValue.textContent = `${value}%`;
+    });
+
+    leftStackXSlider.addEventListener('change', (e) => {
+      const value = parseInt(e.target.value);
+      this.saveSettings({ leftStackX: value });
+      this.notifyContentScript();
+    });
+
+    // Right Stack X
+    rightStackXSlider.addEventListener('input', (e) => {
+      const value = parseInt(e.target.value);
+      rightStackXValue.textContent = `${value}%`;
+    });
+
+    rightStackXSlider.addEventListener('change', (e) => {
+      const value = parseInt(e.target.value);
+      this.saveSettings({ rightStackX: value });
+      this.notifyContentScript();
+    });
+
+    // Min Block Height
+    minHeightSlider.addEventListener('input', (e) => {
+      const minHeight = parseInt(e.target.value);
+      minHeightValue.textContent = `${minHeight}px`;
+      // Ensure min doesn't exceed max
+      if (minHeight >= parseInt(maxHeightSlider.value)) {
+        maxHeightSlider.value = minHeight + 50;
+        maxHeightValue.textContent = `${minHeight + 50}px`;
+      }
+    });
+
+    minHeightSlider.addEventListener('change', (e) => {
+      const minHeight = parseInt(e.target.value);
+      this.saveSettings({ minBlockHeight: minHeight });
+      this.notifyContentScript();
+    });
+
+    // Max Block Height
+    maxHeightSlider.addEventListener('input', (e) => {
+      const maxHeight = parseInt(e.target.value);
+      maxHeightValue.textContent = `${maxHeight}px`;
+      // Ensure max doesn't go below min
+      if (maxHeight <= parseInt(minHeightSlider.value)) {
+        minHeightSlider.value = maxHeight - 50;
+        minHeightValue.textContent = `${maxHeight - 50}px`;
+      }
+    });
+
+    maxHeightSlider.addEventListener('change', (e) => {
+      const maxHeight = parseInt(e.target.value);
+      this.saveSettings({ maxBlockHeight: maxHeight });
+      this.notifyContentScript();
+    });
+
+    // Mirror Horizontally toggle
+    mirrorToggle.addEventListener('change', (e) => {
+      this.saveSettings({ mirrorHorizontally: e.target.checked });
+      this.notifyContentScript();
+    });
   }
 
   setupEventListeners() {
@@ -215,15 +212,6 @@ class TaskManager {
       btn.classList.toggle('active', parseInt(btn.dataset.step) === step);
     });
     
-    const labels = [
-      'Editing Tasks',
-      'Yesterday\'s Tasks',
-      'Show Progress',
-      'Today\'s Plan',
-      'Blockers'
-    ];
-    document.getElementById('currentStepLabel').textContent = labels[step] || 'Unknown';
-    
     this.render();
     this.notifyContentScript();
   }
@@ -255,7 +243,53 @@ class TaskManager {
   render() {
     const tasksList = document.getElementById('tasksList');
     
-    tasksList.innerHTML = this.tasks.map(task => {
+    // Calculate counts for each status
+    const statusCounts = {
+      all: this.tasks.length,
+      todo: this.tasks.filter(t => t.status === 'todo').length,
+      nexttodo: this.tasks.filter(t => t.status === 'nexttodo').length,
+      done: this.tasks.filter(t => t.status === 'done').length,
+      backlog: this.tasks.filter(t => t.status === 'backlog').length,
+      partlydone: this.tasks.filter(t => t.status === 'partlydone').length
+    };
+    
+    // Update pill counts and disabled states
+    Object.keys(statusCounts).forEach(status => {
+      const countEl = document.getElementById(`count-${status}`);
+      const pillEl = document.querySelector(`.filter-pill[data-status="${status}"]`);
+      
+      if (countEl) {
+        countEl.textContent = statusCounts[status];
+      }
+      
+      // Disable pills with 0 tasks (except 'all')
+      if (pillEl && status !== 'all') {
+        if (statusCounts[status] === 0) {
+          pillEl.classList.add('disabled');
+          // If this was the active filter and now has 0 tasks, switch to 'all'
+          if (this.activeFilter === status) {
+            this.activeFilter = 'all';
+            pillEl.classList.remove('active');
+            document.querySelector('.filter-pill[data-status="all"]').classList.add('active');
+          }
+        } else {
+          pillEl.classList.remove('disabled');
+        }
+      }
+    });
+    
+    // Filter tasks based on active filter
+    const filteredTasks = this.activeFilter === 'all' 
+      ? this.tasks 
+      : this.tasks.filter(task => task.status === this.activeFilter);
+    
+    if (filteredTasks.length === 0) {
+      tasksList.innerHTML = '<div class="empty-state">No tasks yet. Add one above!</div>';
+      this.updateStats();
+      return;
+    }
+    
+    tasksList.innerHTML = filteredTasks.map(task => {
       const statusOptions = [
         { value: 'todo', label: '📋 To-Do', color: '#667eea' },
         { value: 'nexttodo', label: '⏭️ Next To-Do', color: '#4facfe' },
@@ -271,18 +305,8 @@ class TaskManager {
       <div class="task-item" data-id="${task.id}" style="border-left: 4px solid ${currentStatusInfo.color}">
         <div class="task-header">
           <span class="task-text">${this.escapeHtml(task.text)}</span>
-          <div class="task-actions">
-            <button class="delete-btn" data-action="delete" data-id="${task.id}">🗑️</button>
-          </div>
-        </div>
-        <div class="task-size">
-          <div class="size-bar">
-            <div class="size-fill" style="width: ${Math.min(task.size, 100)}%; background: ${currentStatusInfo.color}"></div>
-          </div>
-          <span class="size-label">${task.size}%</span>
         </div>
         <div class="task-status-control">
-          <label>Status:</label>
           <select class="status-select" data-id="${task.id}">
             ${statusOptions.map(opt => `
               <option value="${opt.value}" ${currentStatus === opt.value ? 'selected' : ''}>
@@ -290,6 +314,8 @@ class TaskManager {
               </option>
             `).join('')}
           </select>
+          <span class="task-size">${task.size}%</span>
+          <button class="delete-btn" data-action="delete" data-id="${task.id}">🗑️</button>
         </div>
         ${currentStatus === 'partlydone' ? `
         <div class="task-percent-control">
@@ -346,7 +372,28 @@ class TaskManager {
   }
 
   updateStats() {
-    const total = this.tasks.reduce((sum, task) => sum + task.size, 0);
+    // Calculate total based on presentation step
+    let total = 0;
+    if (this.presentationStep === 1) {
+      // Step 1: Count left stack (todo, done, partlydone)
+      total = this.tasks
+        .filter(t => t.status === 'todo' || t.status === 'done' || t.status === 'partlydone')
+        .reduce((sum, task) => sum + task.size, 0);
+    } else if (this.presentationStep === 2) {
+      // Step 2: Count right stack (done, partlydone)
+      total = this.tasks
+        .filter(t => t.status === 'done' || t.status === 'partlydone')
+        .reduce((sum, task) => sum + task.size, 0);
+    } else if (this.presentationStep === 3) {
+      // Step 3: Count left stack (todo, partlydone, nexttodo)
+      total = this.tasks
+        .filter(t => t.status === 'todo' || t.status === 'partlydone' || t.status === 'nexttodo')
+        .reduce((sum, task) => sum + task.size, 0);
+    } else {
+      // Step 0 or other: Count all tasks
+      total = this.tasks.reduce((sum, task) => sum + task.size, 0);
+    }
+    
     const totalEl = document.getElementById('totalProgress');
     totalEl.textContent = `${total}%`;
     totalEl.style.color = total > 100 ? '#dc3545' : '#28a745';
@@ -357,7 +404,7 @@ class TaskManager {
   }
 
   async loadTasks() {
-    const data = await chrome.storage.local.get(['tasks', 'nextId', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize']);
+    const data = await chrome.storage.local.get(['tasks', 'nextId', 'overlayEnabled', 'leftStackX', 'rightStackX', 'minBlockHeight', 'maxBlockHeight']);
     this.tasks = data.tasks || [];
     // Ensure all partlydone tasks have percentComplete property
     this.tasks.forEach(task => {
@@ -376,16 +423,16 @@ class TaskManager {
   async notifyContentScript() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab) {
-      const data = await chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize']);
+      const data = await chrome.storage.local.get(['tasks', 'overlayEnabled', 'leftStackX', 'rightStackX', 'minBlockHeight', 'maxBlockHeight', 'mirrorHorizontally']);
       chrome.tabs.sendMessage(tab.id, { 
         type: 'UPDATE_TASKS', 
         tasks: data.tasks || [],
         overlayEnabled: data.overlayEnabled !== false,
-        safeZoneSize: data.safeZoneSize !== undefined ? data.safeZoneSize : 200,
-        safeZoneOffsetX: data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0,
-        safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0,
-        minBubbleSize: data.minBubbleSize !== undefined ? data.minBubbleSize : 40,
-        maxBubbleSize: data.maxBubbleSize !== undefined ? data.maxBubbleSize : 200,
+        leftStackX: data.leftStackX !== undefined ? data.leftStackX : 25,
+        rightStackX: data.rightStackX !== undefined ? data.rightStackX : 75,
+        minBlockHeight: data.minBlockHeight !== undefined ? data.minBlockHeight : 50,
+        maxBlockHeight: data.maxBlockHeight !== undefined ? data.maxBlockHeight : 250,
+        mirrorHorizontally: data.mirrorHorizontally !== undefined ? data.mirrorHorizontally : true,
         presentationStep: this.presentationStep
       }).catch(() => {
         // Tab might not have content script injected

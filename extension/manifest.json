@@ -40,7 +40,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js", "matter.min.js"],
+      "resources": ["injected.js", "matter.min.js", "GoogleSans-Medium.ttf"],
       "matches": ["<all_urls>"]
     }
   ]
