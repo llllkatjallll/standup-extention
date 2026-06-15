@@ -246,7 +246,7 @@
         const colors = [
           '#667eea', '#764ba2', '#f093fb', '#4facfe',
           '#43e97b', '#fa709a', '#fee140', '#30cfd0',
-          '#a8edea', '#fed6e3', '#c471f5', '#12c2e9'
+          '#a8edc5', '#fed6e3', '#c471f5', '#12c2e9', '#F86F03', '#f88888', '#FFD150', '#9fac53', '#89b86d', '#e78351'
         ];
         
         // Function to get consistent color for a task based on its ID
