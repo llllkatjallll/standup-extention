@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Standup Overlay</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>📋 Standup Tasks</h1>
+    
+    <div class="add-task-section">
+      <input type="text" id="taskInput" placeholder="Add a task..." />
+      <input type="number" id="taskSize" placeholder="%" min="1" max="100" value="10" />
+      <button id="addTaskBtn">+</button>
+    </div>
+
+    <div class="tasks-list" id="tasksList"></div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <span>Total:</span>
+        <strong id="totalProgress">0%</strong>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label class="toggle">
+        <input type="checkbox" id="overlayEnabled" checked>
+        <span>Show overlay in meetings</span>
+      </label>
+    </div>
+
+    <div class="info">
+      <p><strong>How to use:</strong></p>
+      <ol>
+        <li>Add your standup tasks here</li>
+        <li>Join your meeting (Meet/Zoom/Teams)</li>
+        <li>Turn on your camera</li>
+        <li>Your tasks will appear as an overlay!</li>
+      </ol>
+      <p><small>Mark tasks complete during your standup by clicking them</small></p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

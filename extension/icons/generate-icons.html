@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Icons</title>
+</head>
+<body>
+  <h1>Icon Generator</h1>
+  <p>This page generates the extension icons. Right-click each canvas and "Save image as..."</p>
+  
+  <div>
+    <h3>16x16</h3>
+    <canvas id="icon16" width="16" height="16"></canvas>
+  </div>
+  
+  <div>
+    <h3>48x48</h3>
+    <canvas id="icon48" width="48" height="48"></canvas>
+  </div>
+  
+  <div>
+    <h3>128x128</h3>
+    <canvas id="icon128" width="128" height="128"></canvas>
+  </div>
+
+  <script>
+    function drawIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+      
+      // Background gradient
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#667eea');
+      gradient.addColorStop(1, '#764ba2');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+      
+      // Draw checklist icon
+      ctx.fillStyle = 'white';
+      const scale = size / 128;
+      
+      // Checkboxes
+      const boxSize = 25 * scale;
+      const boxGap = 10 * scale;
+      const startX = 30 * scale;
+      const startY = 25 * scale;
+      
+      for (let i = 0; i < 3; i++) {
+        const y = startY + i * (boxSize + boxGap);
+        
+        // Box
+        ctx.fillStyle = i === 0 ? '#28a745' : 'rgba(255,255,255,0.3)';
+        ctx.fillRect(startX, y, boxSize, boxSize);
+        
+        if (i === 0) {
+          // Checkmark
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 4 * scale;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(startX + 6 * scale, y + 12 * scale);
+          ctx.lineTo(startX + 10 * scale, y + 18 * scale);
+          ctx.lineTo(startX + 19 * scale, y + 7 * scale);
+          ctx.stroke();
+        }
+        
+        // Line next to box
+        ctx.fillStyle = 'white';
+        ctx.fillRect(startX + boxSize + 8 * scale, y + 8 * scale, 40 * scale, 3 * scale);
+        ctx.fillRect(startX + boxSize + 8 * scale, y + 15 * scale, 25 * scale, 2 * scale);
+      }
+    }
+    
+    drawIcon(document.getElementById('icon16'));
+    drawIcon(document.getElementById('icon48'));
+    drawIcon(document.getElementById('icon128'));
+  </script>
+</body>
+</html>
