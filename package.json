@@ -1,0 +1,16 @@
+{
+  "name": "standup-overlay",
+  "version": "1.0.0",
+  "description": "Display task overlay on webcam for daily standup meetings",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.2.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {}
+}

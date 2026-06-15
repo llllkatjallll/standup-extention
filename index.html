@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Standup Overlay</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Control Panel -->
+    <div class="control-panel">
+      <h1>📋 Standup Overlay</h1>
+      
+      <div class="add-task-section">
+        <input type="text" id="taskInput" placeholder="Add a task..." />
+        <input type="number" id="taskSize" placeholder="%" min="1" max="100" value="10" />
+        <button id="addTaskBtn">+ Add Task</button>
+      </div>
+
+      <div class="tasks-list" id="tasksList"></div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <span>Total Progress:</span>
+          <strong id="totalProgress">0%</strong>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="startCameraBtn" class="primary">🎥 Start Camera</button>
+        <button id="toggleOverlayBtn" disabled>👁️ Toggle Overlay</button>
+      </div>
+
+      <div class="info">
+        <p><strong>Tip:</strong> Use OBS Browser Source or similar to capture the camera view as a virtual webcam.</p>
+        <p>Browser Source URL: <code id="sourceUrl">http://localhost:3000</code></p>
+      </div>
+    </div>
+
+    <!-- Camera View -->
+    <div class="camera-container">
+      <video id="webcam" autoplay playsinline></video>
+      <canvas id="overlay"></canvas>
+      <div id="cameraPlaceholder" class="placeholder">
+        <p>📷 Click "Start Camera" to begin</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
