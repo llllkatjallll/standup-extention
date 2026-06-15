@@ -91,6 +91,31 @@
           <p class="preview-label">Preview (your video)</p>
         </div>
       </div>
+
+      <div class="settings-section">
+        <h3>🎯 Bubble Sizes</h3>
+        <p class="setting-description">Control the minimum and maximum size of task bubbles</p>
+        
+        <div class="setting-control">
+          <label for="minBubbleSize">Minimum bubble size:</label>
+          <div class="slider-container">
+            <input type="range" id="minBubbleSize" min="20" max="100" value="40" step="5">
+            <span id="minBubbleSizeValue">40px</span>
+          </div>
+        </div>
+
+        <div class="setting-control">
+          <label for="maxBubbleSize">Maximum bubble size:</label>
+          <div class="slider-container">
+            <input type="range" id="maxBubbleSize" min="80" max="300" value="200" step="10">
+            <span id="maxBubbleSizeValue">200px</span>
+          </div>
+        </div>
+
+        <div class="info">
+          <p><small>💡 Task bubbles scale between min and max based on their percentage value</small></p>
+        </div>
+      </div>
     </div>
   </div>
 

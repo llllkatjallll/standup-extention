@@ -45,10 +45,14 @@ class TaskManager {
     const offsetXValue = document.getElementById('safeZoneOffsetXValue');
     const offsetYSlider = document.getElementById('safeZoneOffsetY');
     const offsetYValue = document.getElementById('safeZoneOffsetYValue');
+    const minSizeSlider = document.getElementById('minBubbleSize');
+    const minSizeValue = document.getElementById('minBubbleSizeValue');
+    const maxSizeSlider = document.getElementById('maxBubbleSize');
+    const maxSizeValue = document.getElementById('maxBubbleSizeValue');
     const previewCircle = document.getElementById('previewCircle');
 
     // Load saved values
-    chrome.storage.local.get(['safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY'], (data) => {
+    chrome.storage.local.get(['safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize'], (data) => {
       const size = data.safeZoneSize !== undefined ? data.safeZoneSize : 200;
       const offsetX = data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0;
       const offsetY = data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0;
@@ -59,6 +63,13 @@ class TaskManager {
       offsetXValue.textContent = `${offsetX}px`;
       offsetYSlider.value = offsetY;
       offsetYValue.textContent = `${offsetY}px`;
+      
+      const minSize = data.minBubbleSize !== undefined ? data.minBubbleSize : 40;
+      const maxSize = data.maxBubbleSize !== undefined ? data.maxBubbleSize : 200;
+      minSizeSlider.value = minSize;
+      minSizeValue.textContent = `${minSize}px`;
+      maxSizeSlider.value = maxSize;
+      maxSizeValue.textContent = `${maxSize}px`;
       
       this.updatePreview(size, offsetX, offsetY);
     });
@@ -96,6 +107,38 @@ class TaskManager {
     offsetYSlider.addEventListener('change', (e) => {
       const offsetY = parseInt(e.target.value);
       this.saveSettings({ safeZoneOffsetY: offsetY });
+      this.notifyContentScript();
+    });
+
+    minSizeSlider.addEventListener('input', (e) => {
+      const minSize = parseInt(e.target.value);
+      minSizeValue.textContent = `${minSize}px`;
+      // Ensure min doesn't exceed max
+      if (minSize >= parseInt(maxSizeSlider.value)) {
+        maxSizeSlider.value = minSize + 20;
+        maxSizeValue.textContent = `${minSize + 20}px`;
+      }
+    });
+
+    minSizeSlider.addEventListener('change', (e) => {
+      const minSize = parseInt(e.target.value);
+      this.saveSettings({ minBubbleSize: minSize });
+      this.notifyContentScript();
+    });
+
+    maxSizeSlider.addEventListener('input', (e) => {
+      const maxSize = parseInt(e.target.value);
+      maxSizeValue.textContent = `${maxSize}px`;
+      // Ensure max doesn't go below min
+      if (maxSize <= parseInt(minSizeSlider.value)) {
+        minSizeSlider.value = maxSize - 20;
+        minSizeValue.textContent = `${maxSize - 20}px`;
+      }
+    });
+
+    maxSizeSlider.addEventListener('change', (e) => {
+      const maxSize = parseInt(e.target.value);
+      this.saveSettings({ maxBubbleSize: maxSize });
       this.notifyContentScript();
     });
   }
@@ -219,7 +262,7 @@ class TaskManager {
   }
 
   async loadTasks() {
-    const data = await chrome.storage.local.get(['tasks', 'nextId', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY']);
+    const data = await chrome.storage.local.get(['tasks', 'nextId', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize']);
     this.tasks = data.tasks || [];
     this.nextId = data.nextId || 1;
     document.getElementById('overlayEnabled').checked = data.overlayEnabled !== false;
@@ -232,14 +275,16 @@ class TaskManager {
   async notifyContentScript() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab) {
-      const data = await chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY']);
+      const data = await chrome.storage.local.get(['tasks', 'overlayEnabled', 'safeZoneSize', 'safeZoneOffsetX', 'safeZoneOffsetY', 'minBubbleSize', 'maxBubbleSize']);
       chrome.tabs.sendMessage(tab.id, { 
         type: 'UPDATE_TASKS', 
         tasks: data.tasks || [],
         overlayEnabled: data.overlayEnabled !== false,
         safeZoneSize: data.safeZoneSize !== undefined ? data.safeZoneSize : 200,
         safeZoneOffsetX: data.safeZoneOffsetX !== undefined ? data.safeZoneOffsetX : 0,
-        safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0
+        safeZoneOffsetY: data.safeZoneOffsetY !== undefined ? data.safeZoneOffsetY : 0,
+        minBubbleSize: data.minBubbleSize !== undefined ? data.minBubbleSize : 40,
+        maxBubbleSize: data.maxBubbleSize !== undefined ? data.maxBubbleSize : 200
       }).catch(() => {
         // Tab might not have content script injected
       });

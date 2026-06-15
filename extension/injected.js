@@ -6,11 +6,17 @@
 
   let tasks = [];
   let overlayEnabled = true;
-  let circlePositions = new Map(); // Store positions and velocities
   let safeZoneSize = 200; // Default safe zone radius
   let safeZoneOffsetX = 0;
   let safeZoneOffsetY = 0;
-  let isSettled = false; // Track if physics has settled
+  let minBubbleSize = 40;
+  let maxBubbleSize = 200;
+  
+  // Matter.js variables (Matter is loaded globally by content.js)
+  let engine = null;
+  let world = null;
+  let bubbleBodies = new Map(); // Map task.id to Matter.js body
+  let isSettled = false;
   let settleTimer = 0;
 
   // Listen for task updates
@@ -24,7 +30,9 @@
       safeZoneSize = event.data.safeZoneSize !== undefined ? event.data.safeZoneSize : 200;
       safeZoneOffsetX = event.data.safeZoneOffsetX !== undefined ? event.data.safeZoneOffsetX : 0;
       safeZoneOffsetY = event.data.safeZoneOffsetY !== undefined ? event.data.safeZoneOffsetY : 0;
-      console.log('Standup Overlay: Tasks updated', tasks.length, 'Safe zone:', safeZoneSize, 'Offset:', safeZoneOffsetX, safeZoneOffsetY);
+      minBubbleSize = event.data.minBubbleSize !== undefined ? event.data.minBubbleSize : 40;
+      maxBubbleSize = event.data.maxBubbleSize !== undefined ? event.data.maxBubbleSize : 200;
+      console.log('Standup Overlay: Tasks updated', tasks.length, 'Sizes:', minBubbleSize, '-', maxBubbleSize);
       
       // Reset settled state when tasks or settings change
       isSettled = false;
@@ -105,10 +113,30 @@
         console.error('Standup Overlay: Video play failed', e);
       }
 
-      // Simple physics simulation
+      // Initialize Matter.js engine (Matter.js is already loaded by content.js)
+      if (!engine && window.Matter) {
+        engine = window.Matter.Engine.create({
+          gravity: { x: 0, y: 0 } // No gravity, we'll use custom forces
+        });
+        world = engine.world;
+        console.log('Standup Overlay: Matter.js engine initialized');
+      }
+      
+      // Fallback if Matter.js not loaded
+      if (!window.Matter) {
+        console.error('Standup Overlay: Matter.js not loaded, cannot initialize physics');
+        return stream; // Return original stream
+      }
+
+      // Color palette
+      const colors = [
+        '#667eea', '#764ba2', '#f093fb', '#4facfe',
+        '#43e97b', '#fa709a', '#fee140', '#30cfd0',
+        '#a8edea', '#fed6e3', '#c471f5', '#12c2e9'
+      ];
+
+      // Initialize/update bubble bodies
       function initCirclePositions(width, height) {
-        const baseSize = 40;
-        const maxSize = 200;
         const colors = [
           '#667eea', '#764ba2', '#f093fb', '#4facfe',
           '#43e97b', '#fa709a', '#fee140', '#30cfd0',
@@ -119,159 +147,183 @@
         const centerY = height / 2 + safeZoneOffsetY;
         
         tasks.forEach((task, index) => {
-          if (!circlePositions.has(task.id)) {
-            const size = baseSize + (task.size / 100) * (maxSize - baseSize);
-            const angle = (index / tasks.length) * Math.PI * 2;
-            const radius = safeZoneSize / 2 + size / 2 + 20; // Position just outside safe zone
+          const size = minBubbleSize + (task.size / 100) * (maxBubbleSize - minBubbleSize);
+          const targetAngle = (index / tasks.length) * Math.PI * 2;
+          
+          if (!bubbleBodies.has(task.id)) {
+            // Create new body
+            const angle = targetAngle;
+            const radius = safeZoneSize / 2 + size / 2 + 20;
             
-            circlePositions.set(task.id, {
-              x: centerX + Math.cos(angle) * radius,
-              y: centerY + Math.sin(angle) * radius,
-              vx: 0,
-              vy: 0,
-              size: size,
-              color: colors[index % colors.length]
-            });
+            const body = window.Matter.Bodies.circle(
+              centerX + Math.cos(angle) * radius,
+              centerY + Math.sin(angle) * radius,
+              size / 2,
+              {
+                restitution: 0.3,
+                friction: 0.3,
+                frictionAir: 0.05,
+                density: 0.001
+              }
+            );
+            
+            // Store custom properties
+            body.taskId = task.id;
+            body.targetAngle = targetAngle;
+            body.displaySize = size;
+            body.color = colors[index % colors.length];
+            
+            window.Matter.World.add(world, body);
+            bubbleBodies.set(task.id, body);
           } else {
-            // Update size and color for existing circles
-            const pos = circlePositions.get(task.id);
-            pos.size = baseSize + (task.size / 100) * (maxSize - baseSize);
-            pos.color = colors[index % colors.length];
+            // Update existing body
+            const body = bubbleBodies.get(task.id);
+            body.displaySize = size;
+            body.color = colors[index % colors.length];
+            body.targetAngle = targetAngle;
+            
+            // Update circle radius if size changed significantly
+            const currentRadius = body.circleRadius;
+            const newRadius = size / 2;
+            if (Math.abs(currentRadius - newRadius) > 5) {
+              window.Matter.Body.scale(body, newRadius / currentRadius, newRadius / currentRadius);
+            }
           }
         });
         
         // Remove deleted tasks
         const taskIds = new Set(tasks.map(t => t.id));
-        for (let id of circlePositions.keys()) {
+        for (let [id, body] of bubbleBodies.entries()) {
           if (!taskIds.has(id)) {
-            circlePositions.delete(id);
+            window.Matter.World.remove(world, body);
+            bubbleBodies.delete(id);
           }
         }
       }
 
-      // Simple collision detection and resolution
+      // Physics update with Matter.js
       function updatePhysics(width, height) {
-        if (isSettled) return false; // Don't update if already settled
+        if (isSettled || !engine) return false;
         
-        const padding = 50;
-        const damping = 0.85;
-        const repulsionForce = 0.5;
         const centerX = width / 2 + safeZoneOffsetX;
         const centerY = height / 2 + safeZoneOffsetY;
+        const padding = 50;
         
         let maxVelocity = 0;
         
-        // Apply forces between overlapping circles
-        const positions = Array.from(circlePositions.entries());
-        
-        for (let i = 0; i < positions.length; i++) {
-          const [id1, pos1] = positions[i];
+        // Apply custom forces to each body
+        bubbleBodies.forEach((body) => {
+          const dx = body.position.x - centerX;
+          const dy = body.position.y - centerY;
+          const distFromCenter = Math.sqrt(dx * dx + dy * dy);
           
-          // Repulsion from center safe zone
-          const dxFromCenter = pos1.x - centerX;
-          const dyFromCenter = pos1.y - centerY;
-          const distFromCenter = Math.sqrt(dxFromCenter * dxFromCenter + dyFromCenter * dyFromCenter);
-          const minDistFromCenter = safeZoneSize / 2 + pos1.size / 2 + 10;
-          
+          // 1. Safe zone repulsion
+          const minDistFromCenter = safeZoneSize / 2 + body.circleRadius + 10;
           if (distFromCenter < minDistFromCenter && distFromCenter > 0) {
-            // Too close to center, push away
             const overlap = minDistFromCenter - distFromCenter;
-            const nx = dxFromCenter / distFromCenter;
-            const ny = dyFromCenter / distFromCenter;
-            const force = overlap * repulsionForce * 2; // Stronger force for safe zone
-            
-            pos1.vx += nx * force;
-            pos1.vy += ny * force;
+            const forceMag = overlap * 0.002; // Reduced force for Matter.js
+            window.Matter.Body.applyForce(body, body.position, {
+              x: (dx / distFromCenter) * forceMag,
+              y: (dy / distFromCenter) * forceMag
+            });
           }
           
-          for (let j = i + 1; j < positions.length; j++) {
-            const [id2, pos2] = positions[j];
+          // 2. Ring constraint - keep on circle
+          const targetRadius = safeZoneSize / 2 + body.circleRadius + 20;
+          const radiusError = distFromCenter - targetRadius;
+          if (Math.abs(radiusError) > 5 && distFromCenter > 0) {
+            const forceMag = radiusError * -0.0005;
+            window.Matter.Body.applyForce(body, body.position, {
+              x: (dx / distFromCenter) * forceMag,
+              y: (dy / distFromCenter) * forceMag
+            });
+          }
+          
+          // 3. Angular positioning - distribute evenly (STRONG force)
+          if (body.targetAngle !== undefined && distFromCenter > 10) {
+            const currentAngle = Math.atan2(dy, dx);
+            let angleDiff = body.targetAngle - currentAngle;
             
-            const dx = pos2.x - pos1.x;
-            const dy = pos2.y - pos1.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const minDist = (pos1.size + pos2.size) / 2 + 15; // Add gap
+            // Normalize angle
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
             
-            if (dist < minDist && dist > 0) {
-              // Circles overlap, push apart
-              const overlap = minDist - dist;
-              const nx = dx / dist;
-              const ny = dy / dist;
+            if (Math.abs(angleDiff) > 0.01) {
+              const tangentX = -Math.sin(currentAngle);
+              const tangentY = Math.cos(currentAngle);
+              const forceMag = angleDiff * 0.003; // 10x stronger for even distribution
               
-              const force = overlap * repulsionForce;
-              
-              pos1.vx -= nx * force;
-              pos1.vy -= ny * force;
-              pos2.vx += nx * force;
-              pos2.vy += ny * force;
+              window.Matter.Body.applyForce(body, body.position, {
+                x: tangentX * forceMag,
+                y: tangentY * forceMag
+              });
             }
           }
           
-          // Keep circles on a ring around the safe zone
-          const targetRadius = safeZoneSize / 2 + pos1.size / 2 + 20;
-          const radiusError = distFromCenter - targetRadius;
+          // 4. Bubble-to-bubble repulsion to prevent clustering
+          bubbleBodies.forEach((otherBody) => {
+            if (body !== otherBody) {
+              const dx2 = otherBody.position.x - body.position.x;
+              const dy2 = otherBody.position.y - body.position.y;
+              const dist = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+              const minDist = body.circleRadius + otherBody.circleRadius + 15;
+              
+              if (dist < minDist * 1.5 && dist > 0) {
+                // Push bubbles apart along the circle
+                const overlap = minDist * 1.5 - dist;
+                const forceMag = overlap * 0.0002;
+                window.Matter.Body.applyForce(body, body.position, {
+                  x: -(dx2 / dist) * forceMag,
+                  y: -(dy2 / dist) * forceMag
+                });
+              }
+            }
+          });
           
-          if (Math.abs(radiusError) > 5 && distFromCenter > 0) {
-            // Pull toward target ring
-            const nx = dxFromCenter / distFromCenter;
-            const ny = dyFromCenter / distFromCenter;
-            const force = radiusError * 0.05;
-            
-            pos1.vx -= nx * force;
-            pos1.vy -= ny * force;
+          // 5. Boundary constraints
+          const radius = body.circleRadius;
+          if (body.position.x - radius < padding) {
+            window.Matter.Body.setPosition(body, { x: padding + radius, y: body.position.y });
+            window.Matter.Body.setVelocity(body, { x: Math.abs(body.velocity.x) * 0.5, y: body.velocity.y });
           }
-        }
-        
-        // Update positions
-        positions.forEach(([id, pos]) => {
-          pos.x += pos.vx;
-          pos.y += pos.vy;
+          if (body.position.x + radius > width - padding) {
+            window.Matter.Body.setPosition(body, { x: width - padding - radius, y: body.position.y });
+            window.Matter.Body.setVelocity(body, { x: -Math.abs(body.velocity.x) * 0.5, y: body.velocity.y });
+          }
+          if (body.position.y - radius < padding) {
+            window.Matter.Body.setPosition(body, { x: body.position.x, y: padding + radius });
+            window.Matter.Body.setVelocity(body, { x: body.velocity.x, y: Math.abs(body.velocity.y) * 0.5 });
+          }
+          if (body.position.y + radius > height - padding) {
+            window.Matter.Body.setPosition(body, { x: body.position.x, y: height - padding - radius });
+            window.Matter.Body.setVelocity(body, { x: body.velocity.x, y: -Math.abs(body.velocity.y) * 0.5 });
+          }
           
-          // Track max velocity
-          const velocity = Math.sqrt(pos.vx * pos.vx + pos.vy * pos.vy);
+          // Track velocity
+          const velocity = Math.sqrt(body.velocity.x ** 2 + body.velocity.y ** 2);
           maxVelocity = Math.max(maxVelocity, velocity);
-          
-          // Keep in bounds
-          const radius = pos.size / 2;
-          if (pos.x - radius < padding) {
-            pos.x = padding + radius;
-            pos.vx *= -0.5;
-          }
-          if (pos.x + radius > width - padding) {
-            pos.x = width - padding - radius;
-            pos.vx *= -0.5;
-          }
-          if (pos.y - radius < padding) {
-            pos.y = padding + radius;
-            pos.vy *= -0.5;
-          }
-          if (pos.y + radius > height - padding) {
-            pos.y = height - padding - radius;
-            pos.vy *= -0.5;
-          }
-          
-          // Apply damping
-          pos.vx *= damping;
-          pos.vy *= damping;
         });
         
+        // Update Matter.js engine
+        window.Matter.Engine.update(engine, 1000 / 60); // 60 FPS
+        
         // Check if settled
-        if (maxVelocity < 0.05) {
+        if (maxVelocity < 0.1) {
           settleTimer++;
-          if (settleTimer > 60) { // Settled for 1 second (60 frames)
+          if (settleTimer > 60) {
             isSettled = true;
             console.log('Standup Overlay: Physics settled');
-            // Zero out all velocities
-            positions.forEach(([id, pos]) => {
-              pos.vx = 0;
-              pos.vy = 0;
+            // Stop all bodies
+            bubbleBodies.forEach((body) => {
+              window.Matter.Body.setVelocity(body, { x: 0, y: 0 });
+              window.Matter.Body.setAngularVelocity(body, 0);
             });
           }
         } else {
           settleTimer = 0;
         }
         
-        return maxVelocity > 0.001; // Return true if still moving
+        return maxVelocity > 0.001;
       }
 
       // Function to draw overlay
@@ -299,11 +351,11 @@
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
         
-        // Draw each circle
+        // Draw each circle from Matter.js bodies
         tasks.forEach(task => {
-          const pos = circlePositions.get(task.id);
-          if (pos) {
-            drawCircle(ctx, task, pos.x, pos.y, pos.size, pos.color);
+          const body = bubbleBodies.get(task.id);
+          if (body) {
+            drawCircle(ctx, task, body.position.x, body.position.y, body.displaySize, body.color);
           }
         });
         
